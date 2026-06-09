@@ -1,0 +1,55 @@
+{
+  "parent": "minecraft:item/generated",
+  "elements": [
+    {
+      "from": [2, 2, 7],
+      "to":   [14, 14, 9],
+      "shade": false,
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#face" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#face" },
+        "east":  { "uv": [7, 2,  9, 14], "texture": "#face" },
+        "west":  { "uv": [7, 2,  9, 14], "texture": "#face" },
+        "up":    { "uv": [2, 7, 14,  9], "texture": "#face" },
+        "down":  { "uv": [2, 7, 14,  9], "texture": "#face" }
+      }
+    }
+  ],
+  "display": {
+    "gui": {
+      "rotation":    [20, 20, 0],
+      "translation": [0, 0, 0],
+      "scale":       [0.9, 0.9, 0.9]
+    },
+    "ground": {
+      "rotation":    [90, 0, 0],
+      "translation": [0, 3, 0],
+      "scale":       [0.5, 0.5, 0.5]
+    },
+    "fixed": {
+      "rotation":    [0, 0, 0],
+      "translation": [0, 0, 0],
+      "scale":       [1, 1, 1]
+    },
+    "thirdperson_righthand": {
+      "rotation":    [0, 0, 0],
+      "translation": [0, 3, 1],
+      "scale":       [0.55, 0.55, 0.55]
+    },
+    "thirdperson_lefthand": {
+      "rotation":    [0, 0, 0],
+      "translation": [0, 3, 1],
+      "scale":       [0.55, 0.55, 0.55]
+    },
+    "firstperson_righthand": {
+      "rotation":    [0, -90, 25],
+      "translation": [1.13, 3.2, 1.13],
+      "scale":       [0.68, 0.68, 0.68]
+    },
+    "firstperson_lefthand": {
+      "rotation":    [0, 90, -25],
+      "translation": [1.13, 3.2, 1.13],
+      "scale":       [0.68, 0.68, 0.68]
+    }
+  }
+}

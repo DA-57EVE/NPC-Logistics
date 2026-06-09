@@ -1,0 +1,9 @@
+{
+  "entity.npclogistics.logistics_worker": "Logistics Worker",
+  "item.npclogistics.work_order_scroll": "Work Order Scroll",
+  "item.npclogistics.location_token_collect": "Collect Token",
+  "item.npclogistics.location_token_craft": "Craft Token",
+  "item.npclogistics.location_token_deposit": "Deposit Token",
+  "screen.npclogistics.work_order": "Work Order Editor",
+  "npclogistics.command.workorder": "Work Order Commands"
+}

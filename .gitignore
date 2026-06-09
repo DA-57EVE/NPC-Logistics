@@ -1,0 +1,14 @@
+# Gradle
+.gradle/
+build/
+
+# Minecraft dev run directory (world saves, logs, screenshots)
+run/
+
+# Local tool configs
+.claude/
+.ai/
+
+# IntelliJ (keep .idea except what it ignores itself)
+*.iml
+out/

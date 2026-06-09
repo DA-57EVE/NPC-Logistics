@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "npclogistics",
+  "version": "${version}",
+  "name": "NPClogistics",
+  "description": "Hire NPC workers and assign them work orders to collect and deliver items along chest/barrel routes, or set up automated crafting tasks with source, workbench, and deposit locations.",
+  "icon": "assets/npclogistics/icon.png",
+  "authors": [
+    "STVN_Net"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.npclogistics.NPClogistics"
+    ],
+    "client": [
+      "com.npclogistics.NPClogisticsClient"
+    ]
+  },
+  "mixins": [
+    "npclogistics.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.20.1",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}

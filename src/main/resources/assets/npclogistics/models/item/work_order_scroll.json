@@ -1,0 +1,7 @@
+{
+  "parent": "npclogistics:item/location_token_base",
+  "textures": {
+    "face":   "npclogistics:item/work_order_scroll_face",
+    "layer0": "npclogistics:item/work_order_scroll"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "package": "net.fabricmc.fabric.mixin.screen",
+  "compatibilityLevel": "JAVA_16",
+  "client": [
+    "GameRendererMixin",
+    "MinecraftClientMixin",
+    "ScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "mixins": [
+    "KeyboardMixin",
+    "MouseMixin",
+    "ScreenAccessor"
+  ],
+  "refmap": "client-fabric-screen-api-v1-refmap.json"
+}
