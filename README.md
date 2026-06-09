@@ -40,8 +40,7 @@ src/
 ├── main/java/com/npclogistics/
 │   ├── NPClogistics.java               # Server entrypoint
 │   ├── ai/
-│   │   ├── WorkOrderBrain.java         # Tick-based route execution AI
-│   │   └── CraftingTaskBrain.java      # Tick-based crafting task execution
+│   │   └── WorkOrderBrain.java         # Tick-based route execution AI
 │   ├── command/
 │   │   └── WorkOrderCommand.java       # /workorder admin commands
 │   ├── data/
@@ -55,7 +54,8 @@ src/
 │   │   ├── LocationTokenItem.java      # Location token item (Collect / Craft / Deposit)
 │   │   └── ModItems.java               # Item registration
 │   ├── screen/
-│   │   └── EquipmentScreenHandler.java # Server-side handler for NPC Worker GUI
+│   │   ├── EquipmentScreenHandler.java # Server-side handler for NPC Worker GUI
+│   │   └── ModScreenHandlers.java      # Screen handler registration
 │   └── network/
 │       └── ModNetworking.java          # C2S / S2C packet definitions
 │
