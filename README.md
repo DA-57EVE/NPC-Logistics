@@ -66,7 +66,7 @@ src/
     ├── renderer/
     │   └── LogisticsWorkerRenderer.java # Biped renderer for worker NPC
     └── screen/
-        ├── EquipmentScreen.java        # NPC Worker GUI (Equipment / Orders / Tasks tabs)
+        ├── EquipmentScreen.java        # NPC Worker GUI (Equipment / Orders / Cargo / Tasks tabs)
         ├── WorkOrderScreen.java        # In-game route editor GUI (drag to reorder)
         └── WorkOrderStopFilterScreen.java # Per-stop item-filter editor
 ```
@@ -138,7 +138,7 @@ the air with a Work Order Scroll. Options:
 ### NPC Worker GUI
 
 **Right-click** any Logistics Worker NPC with an empty hand to open the worker's
-management screen. The screen has three tabs:
+management screen. The screen has four tabs:
 
 #### Equipment tab
 
@@ -158,6 +158,13 @@ Manage the worker's equipped items and identity.
 Displays the work order scrolls currently in the worker's Order slots and summarises
 each route (stop count, positions, COLLECT/DELIVER/BOTH actions). Slots are
 highlighted in gold if the scroll belongs to another player.
+
+#### Cargo tab
+
+Shows the worker's 18-slot internal inventory (2 rows × 9 slots). Items collected
+during delivery runs appear here. Slots are **take-only** — click or shift-click to
+retrieve items into your own inventory. You cannot place items into the cargo hold
+directly; workers fill it themselves during collection stops.
 
 #### Tasks tab
 
@@ -204,6 +211,10 @@ Hovering over an empty slot shows a colour-coded hint describing what goes there
 # Toggle repeating mode
 /workorder setrepeating <worker> true
 /workorder setrepeating <worker> false
+
+# Remove workers (vanilla /kill with entity selector)
+/kill @e[type=npclogistics:logistics_worker]
+/kill @e[type=npclogistics:logistics_worker,name="Ol Dave"]
 ```
 
 ---
@@ -279,13 +290,16 @@ used as the flat `layer0` fallback.
 - [x] GUI: per-stop item filter editor (click to add/remove items)
 - [x] GUI: drag-to-reorder stops
 - [x] Combined COLLECT + DELIVER at a single stop (deliver then collect, two filters)
-- [x] NPC Worker GUI (Equipment / Orders / Tasks tabs)
+- [x] NPC Worker GUI (Equipment / Orders / Cargo / Tasks tabs)
+- [x] Cargo tab — take-only view of the worker's 18-slot internal inventory
 - [x] Location Tokens with 3D coin models (Collect / Craft / Deposit)
 - [x] Crafting Task data model and task slot UI
 - [x] Worker employer system (claim, rename, skin URL)
+- [x] Sounds: chest/barrel open + close sounds on NPC container interaction
+- [x] Any `Inventory` block entity accepted as a route stop (chests, barrels, hoppers, droppers, shulker boxes, etc.)
 - [ ] CraftingTaskBrain: full navigation + crafting execution (currently stub)
 - [ ] Pathfinding: multi-dimension support
-- [ ] Sounds: footstep, chest-open, work-complete sounds
+- [ ] Sounds: footstep and work-complete sounds
 - [ ] Crafting recipe for Work Order Scroll and Location Tokens
 - [ ] Visual route overlay (coloured position beams)
 - [ ] Support for double-chests

@@ -81,4 +81,9 @@ public class CraftingTask {
     public boolean hasAnyContent() {
         return sourcePos != null || !recipeItem.isEmpty() || craftBlockPos != null || depositPos != null;
     }
+
+    /** Whether all four slots are filled — required before the task may fire. */
+    public boolean hasAllContent() {
+        return sourcePos != null && !recipeItem.isEmpty() && craftBlockPos != null && depositPos != null;
+    }
 }

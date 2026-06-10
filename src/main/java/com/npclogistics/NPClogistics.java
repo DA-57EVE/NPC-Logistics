@@ -12,6 +12,8 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.item.ItemStack;
+import net.minecraft.block.Blocks;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
@@ -19,6 +21,7 @@ import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,14 +74,24 @@ public class NPClogistics implements ModInitializer {
             return ActionResult.SUCCESS;
         });
 
-        // Location token right-click: stamp any block's position into the token's NBT.
+        // Location token right-click: stamp a block's position into the token's NBT.
+        // Only valid block types are accepted: storage blocks for COLLECT/DEPOSIT,
+        // crafting table for CRAFT. Wrong-type clicks pass through to vanilla interaction.
         UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
             if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
             ItemStack stack = player.getStackInHand(hand);
             if (!(stack.getItem() instanceof LocationTokenItem token)) return ActionResult.PASS;
-            if (world.isClient) return ActionResult.SUCCESS;
 
             BlockPos pos = hitResult.getBlockPos();
+            if (!isValidBlockForToken(world, pos, token.tokenType)) {
+                if (!world.isClient)
+                    player.sendMessage(Text.literal(token.tokenType.defaultName
+                            + " can't be set here — wrong block type.").formatted(Formatting.RED), true);
+                return ActionResult.PASS; // let vanilla interaction (e.g. open chest) happen
+            }
+
+            if (world.isClient) return ActionResult.SUCCESS; // block vanilla open, server handles stamp
+
             String blockName = world.getBlockState(pos).getBlock().getName().getString();
             LocationTokenItem.stampPos(stack, pos, blockName);
             LocationTokenItem.stampCreator(stack, player.getName().getString());
@@ -93,5 +106,13 @@ public class NPClogistics implements ModInitializer {
         });
 
         LOGGER.info("NPClogistics initialized.");
+    }
+
+    private static boolean isValidBlockForToken(World world, BlockPos pos,
+                                                 LocationTokenItem.TokenType type) {
+        return switch (type) {
+            case COLLECT, DEPOSIT -> world.getBlockEntity(pos) instanceof Inventory;
+            case CRAFT             -> world.getBlockState(pos).isOf(Blocks.CRAFTING_TABLE);
+        };
     }
 }

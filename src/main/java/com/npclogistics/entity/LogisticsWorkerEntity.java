@@ -101,7 +101,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     private String employerName = "";
 
     // ── Crafting tasks ────────────────────────────────────────────────────────
-    public static final int MAX_TASKS = 8;
+    public static final int MAX_TASKS = 6;
     private final CraftingTask[] tasks = new CraftingTask[MAX_TASKS];
     private int currentTaskIndex = -1;
     private int taskTickDelay = 0;
@@ -185,16 +185,19 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
             activeWorkOrder  = pausedWorkOrder;
             currentStopIndex = pausedStopIndex;
             state            = WorkerState.EXECUTING;
-        } else if (pausedState == WorkerState.RETURNING) {
-            state = WorkerState.RETURNING;
         } else if (pausedState == WorkerState.EXECUTING_TASK) {
             currentTaskIndex = pausedTaskIndex;
             state            = WorkerState.EXECUTING_TASK;
         }
+        // RETURNING is intentionally not restored — if the player just placed a WO scroll
+        // while the NPC was heading home, we want it to start the new order immediately.
         pausedState     = null;
         pausedWorkOrder = null;
-        // If nothing was paused, try to start fresh work
-        if (state == WorkerState.IDLE) activateWorkOrders();
+        // If nothing was restored (idle, returning, or freshly opened), try to start work
+        if (state == WorkerState.IDLE || state == WorkerState.RETURNING) {
+            state = WorkerState.IDLE;
+            activateWorkOrders();
+        }
     }
 
     // ── Auto-fire scheduling ──────────────────────────────────────────────────
@@ -235,7 +238,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     private boolean tryStartTask(boolean employerOnly) {
         for (int i = 0; i < MAX_TASKS; i++) {
             CraftingTask t = tasks[i];
-            if (t == null || !t.hasAnyContent()) continue;
+            if (t == null || !t.hasAllContent()) continue;
             if (t.runOnce && t.completed) continue;
             boolean isEmployerTask = (employerUUID != null && employerUUID.equals(t.addedBy));
             if (employerOnly && !isEmployerTask) continue;
@@ -250,7 +253,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     public void advanceTask() {
         for (int i = currentTaskIndex + 1; i < MAX_TASKS; i++) {
             CraftingTask t = tasks[i];
-            if (t == null || !t.hasAnyContent()) continue;
+            if (t == null || !t.hasAllContent()) continue;
             if (t.runOnce && t.completed) continue;
             currentTaskIndex = i;
             executeTask(i);
@@ -283,16 +286,18 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
      */
     public void activateWorkOrders() {
         if (state != WorkerState.IDLE) return;
+        // Anchor home to the NPC's current position the first time we activate.
+        if (homePos.equals(BlockPos.ORIGIN)) homePos = getBlockPos();
         currentWoSlot = 1;
         if (!woScroll1.isEmpty()) {
             WorkOrder order = WorkOrderScrollItem.readOrder(woScroll1);
-            if (order != null) { startWorkOrder(order); return; }
+            if (order != null && !order.getStops().isEmpty()) { startWorkOrder(order); return; }
         }
         if (!woScroll2.isEmpty()) {
             WorkOrder order = WorkOrderScrollItem.readOrder(woScroll2);
-            if (order != null) { currentWoSlot = 2; startWorkOrder(order); return; }
+            if (order != null && !order.getStops().isEmpty()) { currentWoSlot = 2; startWorkOrder(order); return; }
         }
-        // No WOs — fall through to task chain
+        // No valid WOs — fall through to task chain
         startTaskChain();
     }
 
@@ -438,12 +443,26 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     }
 
     /**
-     * Removes the active order and idles the worker in place (waiting for further orders),
-     * returning the removed order so it can be handed back to a player. Null if there was none.
+     * Removes the active order and idles the worker in place.
+     * Falls back to the persisted WO scroll slots when no order is actively executing
+     * (e.g. after the route already completed). Returns the removed order, or null.
      */
     public WorkOrder retrieveWorkOrder() {
         WorkOrder removed = activeWorkOrder;
-        activeWorkOrder = null;
+        if (removed == null) {
+            // Route may have already completed; try to recover the order from the WO slots.
+            if (!woScroll1.isEmpty()) {
+                WorkOrder candidate = WorkOrderScrollItem.readOrder(woScroll1);
+                if (candidate != null && !candidate.getStops().isEmpty()) removed = candidate;
+            }
+            if (removed == null && !woScroll2.isEmpty()) {
+                WorkOrder candidate = WorkOrderScrollItem.readOrder(woScroll2);
+                if (candidate != null && !candidate.getStops().isEmpty()) removed = candidate;
+            }
+        }
+        activeWorkOrder  = null;
+        woScroll1        = ItemStack.EMPTY;
+        woScroll2        = ItemStack.EMPTY;
         currentStopIndex = 0;
         state = WorkerState.IDLE;
         getNavigation().stop();
@@ -464,17 +483,19 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         // If WO slot 1 just finished, try slot 2
         if (currentWoSlot == 1 && !woScroll2.isEmpty()) {
             WorkOrder order2 = WorkOrderScrollItem.readOrder(woScroll2);
-            if (order2 != null) {
+            if (order2 != null && !order2.getStops().isEmpty()) {
                 currentWoSlot = 2;
                 startWorkOrder(order2);
                 return;
             }
         }
-        currentWoSlot = 1;
+        currentWoSlot   = 1;
         activeWorkOrder = null;
-        // After all WOs done, proceed to task chain
-        state = WorkerState.IDLE;
+        // Try the task chain; if nothing to do, walk home.
         startTaskChain();
+        if (state == WorkerState.IDLE) {
+            state = WorkerState.RETURNING;
+        }
     }
 
     // -----------------------------------------------------------------------

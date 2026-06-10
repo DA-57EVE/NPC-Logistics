@@ -9,6 +9,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
+import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.entity.LivingEntity;
@@ -25,7 +26,8 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     // ── Tabs ──────────────────────────────────────────────────────────────────
     private static final int TAB_EQUIPMENT  = 0;
     private static final int TAB_ORDERS     = 1;
-    private static final int TAB_TASKS      = 2;
+    private static final int TAB_CARGO      = 2;
+    private static final int TAB_TASKS      = 3;
     private int activeTab = TAB_EQUIPMENT;
 
     // ── Colours ───────────────────────────────────────────────────────────────
@@ -47,7 +49,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     private static final int C_DEL      = 0xFF993333;
 
     // ── Dimensions ────────────────────────────────────────────────────────────
-    private static final int W = 176;
+    private static final int W = 200;
     private static final int H = 240;
 
     // ── Equipment slot Y positions ────────────────────────────────────────────
@@ -72,6 +74,8 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     private static final int   TOGGLE_X = TX[3] + 20; // 110
     // Delete button
     private static final int   DELETE_X = TOGGLE_X + 16; // 126
+    // Task area box bottom — tight fit around 6 rows
+    private static final int   TASK_AREA_BOTTOM = TROW_Y + MAX_T * TROW_H + 2; // 128
 
     // ── Widgets ───────────────────────────────────────────────────────────────
     private TextFieldWidget nameField;
@@ -79,6 +83,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     private ButtonWidget applyButton;
     private ButtonWidget tabEquip;
     private ButtonWidget tabOrders;
+    private ButtonWidget tabCargo;
     private ButtonWidget tabTasks;
 
     // Per-task-row toggle and delete buttons (built in init)
@@ -107,18 +112,22 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         titleY = 6;
         playerInventoryTitleY = INV_LABEL_Y;
 
-        // Three tabs above the panel, fitting across the full width
+        // Four tabs above the panel, evenly split across the full width
         tabEquip = addDrawableChild(ButtonWidget.builder(
                 Text.literal("Equipment"), btn -> switchTab(TAB_EQUIPMENT))
                 .dimensions(x + 2, y - 14, 56, 13).build());
 
         tabOrders = addDrawableChild(ButtonWidget.builder(
                 Text.literal("Orders"), btn -> switchTab(TAB_ORDERS))
-                .dimensions(x + 60, y - 14, 55, 13).build());
+                .dimensions(x + 60, y - 14, 44, 13).build());
+
+        tabCargo = addDrawableChild(ButtonWidget.builder(
+                Text.literal("Cargo"), btn -> switchTab(TAB_CARGO))
+                .dimensions(x + 106, y - 14, 44, 13).build());
 
         tabTasks = addDrawableChild(ButtonWidget.builder(
                 Text.literal("Tasks"), btn -> switchTab(TAB_TASKS))
-                .dimensions(x + 117, y - 14, 57, 13).build());
+                .dimensions(x + 152, y - 14, 46, 13).build());
 
         // Profile fields (Equipment tab only)
         nameField = addDrawableChild(new TextFieldWidget(textRenderer,
@@ -149,21 +158,28 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
             int ry = TROW_Y + i * TROW_H;
 
             toggleButtons[i] = addDrawableChild(ButtonWidget.builder(
-                    Text.literal(runOnce[i] ? "1" : "∞"),
+                    Text.empty(),
                     btn -> {
                         runOnce[idx] = !runOnce[idx];
                         if (!runOnce[idx]) completed[idx] = false;
-                        btn.setMessage(Text.literal(runOnce[idx] ? "1" : "∞"));
+                        btn.setTooltip(Tooltip.of(Text.literal(runOnce[idx]
+                                ? "Run Once: completes then stops"
+                                : "Loop: repeats indefinitely")));
                         ClientNetworking.sendTaskToggleOnce(handler.workerEntityId, idx, runOnce[idx]);
                     })
-                    .dimensions(x + TOGGLE_X, y + ry, 14, 14).build());
+                    .dimensions(x + TOGGLE_X, y + ry, 14, 14)
+                    .tooltip(Tooltip.of(Text.literal(runOnce[i]
+                            ? "Run Once: completes then stops"
+                            : "Loop: repeats indefinitely")))
+                    .build());
 
             deleteButtons[i] = addDrawableChild(ButtonWidget.builder(
-                    Text.literal("×"),
+                    Text.empty(),
                     btn -> {
                         runOnce[idx]  = false;
                         completed[idx] = false;
                         toggleButtons[idx].setMessage(Text.literal("∞"));
+                        toggleButtons[idx].setTooltip(Tooltip.of(Text.literal("Loop: repeats indefinitely")));
                         ClientNetworking.sendTaskDelete(handler.workerEntityId, idx);
                     })
                     .dimensions(x + DELETE_X, y + ry, 14, 14).build());
@@ -174,8 +190,9 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
 
     private void switchTab(int tab) {
         activeTab = tab;
-        boolean equip  = (tab == TAB_EQUIPMENT);
-        boolean tasks  = (tab == TAB_TASKS);
+        boolean equip = (tab == TAB_EQUIPMENT);
+        boolean cargo = (tab == TAB_CARGO);
+        boolean tasks = (tab == TAB_TASKS);
 
         nameField.visible    = equip;
         skinUrlField.visible = equip;
@@ -187,13 +204,20 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
             deleteButtons[i].visible = tasks;
         }
 
-        // Show/hide task slots (all hidden unless on Tasks tab).
-        repositionTaskSlots(tasks);
-
         // Equipment: armor+hand visible, WO visible
         // Orders:    armor+hand hidden,  WO visible
-        // Tasks:     all equipment hidden
-        setEquipmentActive(equip, !tasks);
+        // Cargo/Tasks: all equipment hidden
+        repositionTaskSlots(tasks);
+        setCargoActive(cargo);
+        setEquipmentActive(equip, !tasks && !cargo);
+    }
+
+    private void setCargoActive(boolean active) {
+        for (int i = 0; i < EquipmentScreenHandler.NPC_INV_SLOTS; i++) {
+            int idx = EquipmentScreenHandler.CARGO_SLOTS_START + i;
+            if (handler.slots.get(idx) instanceof EquipmentScreenHandler.DisablableSlot ds)
+                ds.setActive(active);
+        }
     }
 
     /** Enable/disable equipment slots. armorHand = slots 0-5; wo = slots 6-7. */
@@ -223,7 +247,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     public boolean mouseClicked(double mx, double my, int button) {
         // Task slots are disabled (isEnabled=false) on non-Tasks tabs via DisablableSlot,
         // but an extra click-block guards against any edge cases.
-        if (activeTab != TAB_TASKS) {
+        if (activeTab != TAB_TASKS && activeTab != TAB_CARGO) {
             for (int i = 0; i < MAX_T; i++) {
                 for (int j = 0; j < 4; j++) {
                     Slot s = handler.slots.get(EquipmentScreenHandler.TASK_SLOTS_START + i * 4 + j);
@@ -246,7 +270,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
                     context.drawItemTooltip(textRenderer, slot.getStack(), mouseX, mouseY);
                     return;
                 }
-                // Empty task-slot type hints
+                // Empty task-slot type hints (cargo slots have no hint text)
                 if (activeTab != TAB_TASKS) continue;
                 int idx = handler.slots.indexOf(slot);
                 if (idx < EquipmentScreenHandler.TASK_SLOTS_START) continue;
@@ -312,15 +336,16 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
 
         if      (activeTab == TAB_EQUIPMENT) drawEquipBg(ctx, mx, my);
         else if (activeTab == TAB_ORDERS)    drawOrdersBg(ctx, mx, my);
+        else if (activeTab == TAB_CARGO)     drawCargoBg(ctx, mx, my);
         else                                 drawTasksBg(ctx, mx, my);
 
         // Inventory section (all tabs)
-        ctx.fill(x + 7, y + SEP2_Y,     x + 169, y + SEP2_Y + 1, C_BORDER);
-        ctx.fill(x + 7, y + SEP2_Y + 1, x + 169, y + H - 4,      C_INV);
+        ctx.fill(x + 7, y + SEP2_Y,     x + 193, y + SEP2_Y + 1, C_BORDER);
+        ctx.fill(x + 7, y + SEP2_Y + 1, x + 193, y + H - 4,      C_INV);
         for (int row = 0; row < 3; row++)
             for (int col = 0; col < 9; col++)
                 slotBg(ctx, x + 8 + col * 18, y + GRID_Y + row * 18);
-        ctx.fill(x + 7, y + HOTBAR_Y - 4, x + 169, y + HOTBAR_Y - 3, C_BORDER);
+        ctx.fill(x + 7, y + HOTBAR_Y - 4, x + 193, y + HOTBAR_Y - 3, C_BORDER);
         for (int col = 0; col < 9; col++)
             slotBg(ctx, x + 8 + col * 18, y + HOTBAR_Y);
     }
@@ -337,8 +362,8 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
             InventoryScreen.drawEntity(ctx, x + 88, y + 83, 24,
                     (float)(x + 88) - mx, (float)(y + 36) - my, entity);
 
-        ctx.fill(x + 7, y + SEP1_Y,     x + 169, y + SEP1_Y + 1, C_BORDER);
-        ctx.fill(x + 7, y + SEP1_Y + 1, x + 169, y + SEP2_Y,     C_FIELD);
+        ctx.fill(x + 7, y + SEP1_Y,     x + 193, y + SEP1_Y + 1, C_BORDER);
+        ctx.fill(x + 7, y + SEP1_Y + 1, x + 193, y + SEP2_Y,     C_FIELD);
     }
 
     private void drawOrdersBg(DrawContext ctx, int mx, int my) {
@@ -346,14 +371,27 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         border(ctx, x + 7, y + 16, x + 148, y + SEP1_Y);
         slotBg(ctx, x + 152, y + 78);
         slotBg(ctx, x + 152, y + 98);
-        ctx.fill(x + 7, y + SEP1_Y,     x + 169, y + SEP1_Y + 1, C_BORDER);
-        ctx.fill(x + 7, y + SEP1_Y + 1, x + 169, y + SEP2_Y,     C_PANEL);
+        ctx.fill(x + 7, y + SEP1_Y,     x + 193, y + SEP1_Y + 1, C_BORDER);
+        ctx.fill(x + 7, y + SEP1_Y + 1, x + 193, y + SEP2_Y,     C_PANEL);
+    }
+
+    private void drawCargoBg(DrawContext ctx, int mx, int my) {
+        // Background panel for the 18-slot cargo hold (2 rows × 9 slots)
+        ctx.fill(x + 7, y + 16, x + 193, y + 96, C_WO_BG);
+        border(ctx, x + 7, y + 16, x + 193, y + 96);
+        for (int i = 0; i < EquipmentScreenHandler.NPC_INV_SLOTS; i++) {
+            int col = i % 9;
+            int row = i / 9;
+            slotBg(ctx, x + 8 + col * 18, y + 28 + row * 18); // matches CargoSlot positions
+        }
+        ctx.fill(x + 7, y + SEP1_Y,     x + 193, y + SEP1_Y + 1, C_BORDER);
+        ctx.fill(x + 7, y + SEP1_Y + 1, x + 193, y + SEP2_Y,     C_PANEL);
     }
 
     private void drawTasksBg(DrawContext ctx, int mx, int my) {
-        // Dark task area from title to inventory separator
-        ctx.fill(x + 7, y + 16, x + 169, y + SEP2_Y, C_TASK_BG);
-        border(ctx, x + 7, y + 16, x + 169, y + SEP2_Y);
+        // Dark task area — sized to fit exactly 6 rows
+        ctx.fill(x + 7, y + 16, x + 193, y + TASK_AREA_BOTTOM, C_TASK_BG);
+        border(ctx, x + 7, y + 16, x + 193, y + TASK_AREA_BOTTOM);
 
         // Draw each task row background + its 4 type-coloured slot outlines
         for (int i = 0; i < MAX_T; i++) {
@@ -362,7 +400,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
 
             // Subtle row alternation
             if (i % 2 == 0)
-                ctx.fill(x + 8, y + ry, x + 168, y + ry + TROW_H - 1, 0x08FFFFFF);
+                ctx.fill(x + 8, y + ry, x + 192, y + ry + TROW_H - 1, 0x08FFFFFF);
 
             // Slot backgrounds with type-coded border tint
             slotBgTinted(ctx, x + TX[0], y + ry, 0xFF334488); // blue  = collect
@@ -387,6 +425,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
 
         if      (activeTab == TAB_EQUIPMENT) drawEquipFg(ctx);
         else if (activeTab == TAB_ORDERS)    drawOrdersFg(ctx);
+        else if (activeTab == TAB_CARGO)     drawCargoFg(ctx);
         else                                 drawTasksFg(ctx);
 
         ctx.drawText(textRenderer, "Inventory", 8, INV_LABEL_Y, C_MUTED, false);
@@ -428,6 +467,12 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         drawInvoice(ctx, lx, ly, EquipmentScreenHandler.SLOT_WO2, "Slot 2");
     }
 
+    private void drawCargoFg(DrawContext ctx) {
+        ctx.drawText(textRenderer, "Worker Cargo Hold", 10, 19, C_ACCENT, false);
+        ctx.drawText(textRenderer, "Items collected by this worker.", 10, 80, C_MUTED, false);
+        ctx.drawText(textRenderer, "Click or shift-click to retrieve.", 10, 90, C_MUTED, false);
+    }
+
     private void drawTasksFg(DrawContext ctx) {
         for (int i = 0; i < MAX_T; i++) {
             int ry = TROW_Y + i * TROW_H;
@@ -439,11 +484,43 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
                 ctx.drawText(textRenderer, "✓", TX[1] + 3, ry + 5, C_DONE, false);
             }
 
-            // Added-by label on the right edge (small text, only if row has content)
-            if (hasTaskContent(i) && !handler.taskAddedByName[i].isEmpty()) {
-                String label = handler.taskAddedByName[i];
-                ctx.drawText(textRenderer, label, DELETE_X + 16, ry + 5, C_MUTED, false);
+            // A "free row" is one the current player owns or one that had no owner when the screen
+            // opened (addedByName empty). The latter covers rows the player is currently filling
+            // for the first time — taskIsOwn is stale (set at open time) and would stay false.
+            boolean freeRow = handler.taskIsOwn[i] || handler.taskAddedByName[i].isEmpty();
+            toggleButtons[i].visible = freeRow;
+            deleteButtons[i].visible = freeRow;
+
+            // Toggle button overlay — flat coloured square matching the delete button style
+            if (toggleButtons[i].visible) {
+                boolean hasContent = hasTaskContent(i);
+                int tcol;
+                if (!hasContent)       tcol = toggleButtons[i].isHovered() ? 0xFF444444 : 0xFF2A2A2A;
+                else if (completed[i]) tcol = toggleButtons[i].isHovered() ? 0xFF666666 : 0xFF444444;
+                else if (runOnce[i])   tcol = toggleButtons[i].isHovered() ? 0xFFCCAA33 : 0xFF886600;
+                else                   tcol = toggleButtons[i].isHovered() ? 0xFF44AA44 : 0xFF226622;
+                ctx.fill(TOGGLE_X, ry, TOGGLE_X + 14, ry + 14, tcol);
+                ctx.drawCenteredTextWithShadow(textRenderer,
+                        Text.literal(runOnce[i] ? "1" : "∞"),
+                        TOGGLE_X + 7, ry + 3,
+                        (completed[i] && hasContent) ? 0xAAAAAA : 0xFFFFFF);
             }
+
+            // Red delete button overlay (drawn after buttons, so it sits on top)
+            if (deleteButtons[i].visible) {
+                int col = deleteButtons[i].isHovered() ? 0xFFCC2222 : 0xFF882222;
+                ctx.fill(DELETE_X, ry, DELETE_X + 14, ry + 14, col);
+                ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("✕"),
+                        DELETE_X + 7, ry + 3, 0xFFFFFF);
+            }
+
+            // Update delete button tooltip each frame
+            String addedBy = handler.taskAddedByName[i];
+            deleteButtons[i].setTooltip(Tooltip.of(
+                    addedBy.isEmpty()
+                            ? Text.literal("Delete task")
+                            : Text.literal("Delete task")
+                                    .append(Text.literal("\nAdded by: " + addedBy).formatted(Formatting.GRAY))));
         }
     }
 
@@ -526,4 +603,5 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         if (mc.world == null) return null;
         return mc.world.getEntityById(handler.workerEntityId) instanceof LivingEntity e ? e : null;
     }
+
 }

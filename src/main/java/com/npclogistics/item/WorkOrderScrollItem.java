@@ -5,8 +5,7 @@ import com.npclogistics.data.WorkOrder.RouteStop;
 import com.npclogistics.data.WorkOrder.StopAction;
 import com.npclogistics.entity.LogisticsWorkerEntity;
 import com.npclogistics.network.ModNetworking;
-import net.minecraft.block.entity.BarrelBlockEntity;
-import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.client.item.TooltipContext;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -109,6 +108,9 @@ public class WorkOrderScrollItem extends Item {
         }
         order.setHomePos(worker.getBlockPos());
         worker.setHomePos(worker.getBlockPos());
+        // Keep a copy of the configured scroll on the NPC so the route survives
+        // after completion and can be retrieved via sneak+right-click.
+        worker.setWoScroll1(stack.copy());
         worker.startWorkOrder(order);
         player.sendMessage(Text.literal("Assigned '" + order.getName() + "' with "
                 + order.getStops().size() + " stops.").formatted(Formatting.GREEN), true);
@@ -174,10 +176,9 @@ public class WorkOrderScrollItem extends Item {
     //  Shared logic for the UseBlockCallback (mod initializer)
     // -----------------------------------------------------------------------
 
-    /** True if the block at {@code pos} is a chest or barrel. */
+    /** True if the block at {@code pos} is any inventory-capable container. */
     public static boolean isContainer(World world, BlockPos pos) {
-        var be = world.getBlockEntity(pos);
-        return be instanceof ChestBlockEntity || be instanceof BarrelBlockEntity;
+        return world.getBlockEntity(pos) instanceof Inventory;
     }
 
     /** Outcome of {@link #addStop}, so the caller can give the right feedback. */

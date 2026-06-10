@@ -5,11 +5,14 @@ import com.npclogistics.data.WorkOrder;
 import com.npclogistics.data.WorkOrder.RouteStop;
 import com.npclogistics.entity.LogisticsWorkerEntity;
 import com.npclogistics.entity.LogisticsWorkerEntity.WorkerState;
+import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.block.entity.ChestBlockEntity;
-import net.minecraft.block.entity.BarrelBlockEntity;
+import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvent;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
 
 /**
@@ -24,7 +27,7 @@ import net.minecraft.util.math.BlockPos;
 public class WorkOrderBrain {
 
     /** Distance (blocks) at which the NPC considers itself "at" a stop. */
-    private static final double ARRIVAL_DISTANCE = 2.0;
+    private static final double ARRIVAL_DISTANCE = 3.0;
     /** Ticks between interaction attempts at a container. */
     private static final int INTERACTION_COOLDOWN_TICKS = 10;
 
@@ -71,17 +74,13 @@ public class WorkOrderBrain {
     // -----------------------------------------------------------------------
 
     private void navigateToStop(RouteStop stop) {
-        if (!isAtStop(stop)) {
-            double dist = worker.getPos().distanceTo(stop.pos.toCenterPos());
-            if (dist > ARRIVAL_DISTANCE + 0.5) {
-                // Navigate to the block adjacent to the chest (same Y, one step away)
-                worker.getNavigation().startMovingTo(
-                        stop.pos.getX() + 0.5,
-                        stop.pos.getY(),
-                        stop.pos.getZ() + 0.5,
-                        1.0
-                );
-            }
+        if (!isAtStop(stop) && worker.getNavigation().isIdle()) {
+            worker.getNavigation().startMovingTo(
+                    stop.pos.getX() + 0.5,
+                    stop.pos.getY(),
+                    stop.pos.getZ() + 0.5,
+                    1.0
+            );
         }
     }
 
@@ -94,66 +93,45 @@ public class WorkOrderBrain {
     // -----------------------------------------------------------------------
 
     /**
-     * Attempts to interact with the chest or barrel at the stop's position.
-     * @return true if the container was found and interaction occurred (even if 0 items moved)
+     * Attempts to interact with any Inventory block entity at the stop's position.
+     * Handles chests, barrels, hoppers, droppers, shulker boxes, etc.
+     * @return true if a container was found and interaction occurred (even if 0 items moved)
      */
     private boolean interactWithContainer(ServerWorld world, RouteStop stop) {
         BlockEntity be = world.getBlockEntity(stop.pos);
-        SimpleInventory container = null;
+        if (!(be instanceof Inventory inv)) return false;
 
-        if (be instanceof ChestBlockEntity chest) {
-            // Wrap the chest's inventory into a SimpleInventory view for uniform access
-            container = inventorySnapshot(chest);
-        } else if (be instanceof BarrelBlockEntity barrel) {
-            container = inventorySnapshot(barrel);
-        }
+        // Play an appropriate open sound for the container type.
+        SoundEvent openSound  = world.getBlockState(stop.pos).isOf(Blocks.BARREL)
+                ? SoundEvents.BLOCK_BARREL_OPEN  : SoundEvents.BLOCK_CHEST_OPEN;
+        SoundEvent closeSound = world.getBlockState(stop.pos).isOf(Blocks.BARREL)
+                ? SoundEvents.BLOCK_BARREL_CLOSE : SoundEvents.BLOCK_CHEST_CLOSE;
+        world.playSound(null, stop.pos.getX() + 0.5, stop.pos.getY() + 0.5, stop.pos.getZ() + 0.5,
+                openSound, SoundCategory.BLOCKS, 0.4f, 1.0f);
 
-        if (container == null) return false;
+        // Take a mutable snapshot for uniform read/write, then sync back once.
+        int size = inv.size();
+        SimpleInventory snapshot = new SimpleInventory(size);
+        for (int i = 0; i < size; i++) snapshot.setStack(i, inv.getStack(i).copy());
 
-        // Deliver before collecting so a BOTH stop restocks the container and then grabs
-        // outputs in one visit. Both passes operate on the same snapshot; sync back once.
+        // Deliver before collecting so a BOTH stop restocks the container first.
         if (stop.doesDeliver()) {
-            int given = worker.deliverItemsToInventory(container, stop);
+            int given = worker.deliverItemsToInventory(snapshot, stop);
             NPClogistics.LOGGER.info("{} delivered {} items to {}",
                     worker.getName().getString(), given, stop.pos);
         }
         if (stop.doesCollect()) {
-            int taken = worker.collectItemsFromInventory(container, stop);
+            int taken = worker.collectItemsFromInventory(snapshot, stop);
             NPClogistics.LOGGER.info("{} collected {} items from {}",
                     worker.getName().getString(), taken, stop.pos);
         }
-        syncContainerBack(be, container);
 
+        for (int i = 0; i < size; i++) inv.setStack(i, snapshot.getStack(i));
+        inv.markDirty();
+
+        world.playSound(null, stop.pos.getX() + 0.5, stop.pos.getY() + 0.5, stop.pos.getZ() + 0.5,
+                closeSound, SoundCategory.BLOCKS, 0.4f, 1.0f);
         return true;
-    }
-
-    /**
-     * Creates a mutable SimpleInventory snapshot of a chest or barrel so we
-     * can read/write it uniformly, then sync it back.
-     */
-    private SimpleInventory inventorySnapshot(BlockEntity be) {
-        if (be instanceof ChestBlockEntity chest) {
-            SimpleInventory snap = new SimpleInventory(chest.size());
-            for (int i = 0; i < chest.size(); i++) snap.setStack(i, chest.getStack(i).copy());
-            return snap;
-        }
-        if (be instanceof BarrelBlockEntity barrel) {
-            SimpleInventory snap = new SimpleInventory(barrel.size());
-            for (int i = 0; i < barrel.size(); i++) snap.setStack(i, barrel.getStack(i).copy());
-            return snap;
-        }
-        return null;
-    }
-
-    /** Writes the mutated snapshot back into the real container block entity. */
-    private void syncContainerBack(BlockEntity be, SimpleInventory snap) {
-        if (be instanceof ChestBlockEntity chest) {
-            for (int i = 0; i < chest.size(); i++) chest.setStack(i, snap.getStack(i));
-            chest.markDirty();
-        } else if (be instanceof BarrelBlockEntity barrel) {
-            for (int i = 0; i < barrel.size(); i++) barrel.setStack(i, snap.getStack(i));
-            barrel.markDirty();
-        }
     }
 
     // -----------------------------------------------------------------------
