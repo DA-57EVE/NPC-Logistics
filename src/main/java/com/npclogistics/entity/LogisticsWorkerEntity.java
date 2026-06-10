@@ -491,9 +491,9 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         }
         currentWoSlot   = 1;
         activeWorkOrder = null;
-        // Try the task chain; if nothing to do, walk home.
         startTaskChain();
-        if (state == WorkerState.IDLE) {
+        // If startTaskChain didn't change state to EXECUTING_TASK, head home.
+        if (state != WorkerState.EXECUTING_TASK) {
             state = WorkerState.RETURNING;
         }
     }

@@ -15,23 +15,20 @@ import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
 
-/**
- * Handles the tick-by-tick execution of a WorkOrder for a LogisticsWorkerEntity.
- *
- * Each tick:
- *  1. Determine the current RouteStop.
- *  2. Navigate toward the stop's chest/barrel.
- *  3. When adjacent, interact with the container (collect or deliver).
- *  4. Advance to the next stop; when all stops done, signal the entity.
- */
 public class WorkOrderBrain {
 
-    /** Distance (blocks) at which the NPC considers itself "at" a stop. */
-    private static final double ARRIVAL_DISTANCE = 3.0;
-    /** Ticks between interaction attempts at a container. */
-    private static final int INTERACTION_COOLDOWN_TICKS = 10;
+    private static final double ARRIVAL_DISTANCE    = 3.0;
+    private static final int INTERACTION_COOLDOWN   = 10;
+    /** Ticks the lid stays open before items move. */
+    private static final int OPEN_HOLD_TICKS        = 20;
+    /** Ticks after the lid closes before moving to the next stop. */
+    private static final int CLOSE_HOLD_TICKS       = 10;
+
+    private enum Phase { IDLE, OPENING, CLOSING }
 
     private final LogisticsWorkerEntity worker;
+    private Phase phase    = Phase.IDLE;
+    private int phaseTimer = 0;
 
     public WorkOrderBrain(LogisticsWorkerEntity worker) {
         this.worker = worker;
@@ -52,19 +49,35 @@ public class WorkOrderBrain {
             return;
         }
 
-        RouteStop currentStop = order.getStops().get(idx);
-        navigateToStop(currentStop);
+        RouteStop stop = order.getStops().get(idx);
 
-        if (isAtStop(currentStop) && worker.getInteractionCooldown() == 0) {
-            boolean interacted = interactWithContainer(world, currentStop);
-            if (interacted) {
-                worker.setInteractionCooldown(INTERACTION_COOLDOWN_TICKS);
-                advanceToNextStop(order);
-            } else {
-                // Container not found or full – skip this stop with a warning
-                NPClogistics.LOGGER.warn("{} could not interact with container at {}; skipping.",
-                        worker.getName().getString(), currentStop.pos);
-                advanceToNextStop(order);
+        switch (phase) {
+            case IDLE -> {
+                navigateToStop(stop);
+                if (isAtStop(stop) && worker.getInteractionCooldown() == 0) {
+                    openContainer(world, stop);
+                    phase = Phase.OPENING;
+                    phaseTimer = OPEN_HOLD_TICKS;
+                }
+            }
+            case OPENING -> {
+                if (--phaseTimer <= 0) {
+                    boolean ok = doInteract(world, stop);
+                    if (!ok) {
+                        NPClogistics.LOGGER.warn("{} could not interact with container at {}; skipping.",
+                                worker.getName().getString(), stop.pos);
+                    }
+                    closeContainer(world, stop);
+                    worker.setInteractionCooldown(INTERACTION_COOLDOWN);
+                    phase = Phase.CLOSING;
+                    phaseTimer = CLOSE_HOLD_TICKS;
+                }
+            }
+            case CLOSING -> {
+                if (--phaseTimer <= 0) {
+                    phase = Phase.IDLE;
+                    advanceToNextStop(order);
+                }
             }
         }
     }
@@ -89,32 +102,38 @@ public class WorkOrderBrain {
     }
 
     // -----------------------------------------------------------------------
-    //  Container interaction
+    //  Container open / close (sound + lid animation)
     // -----------------------------------------------------------------------
 
-    /**
-     * Attempts to interact with any Inventory block entity at the stop's position.
-     * Handles chests, barrels, hoppers, droppers, shulker boxes, etc.
-     * @return true if a container was found and interaction occurred (even if 0 items moved)
-     */
-    private boolean interactWithContainer(ServerWorld world, RouteStop stop) {
+    private void openContainer(ServerWorld world, RouteStop stop) {
+        SoundEvent sound = world.getBlockState(stop.pos).isOf(Blocks.BARREL)
+                ? SoundEvents.BLOCK_BARREL_OPEN : SoundEvents.BLOCK_CHEST_OPEN;
+        world.playSound(null, stop.pos.getX() + 0.5, stop.pos.getY() + 0.5, stop.pos.getZ() + 0.5,
+                sound, SoundCategory.BLOCKS, 0.4f, 1.0f);
+        // Sends a viewer-count block event (type 1) so the chest lid animates open on clients.
+        world.addSyncedBlockEvent(stop.pos, world.getBlockState(stop.pos).getBlock(), 1, 1);
+    }
+
+    private void closeContainer(ServerWorld world, RouteStop stop) {
+        SoundEvent sound = world.getBlockState(stop.pos).isOf(Blocks.BARREL)
+                ? SoundEvents.BLOCK_BARREL_CLOSE : SoundEvents.BLOCK_CHEST_CLOSE;
+        world.playSound(null, stop.pos.getX() + 0.5, stop.pos.getY() + 0.5, stop.pos.getZ() + 0.5,
+                sound, SoundCategory.BLOCKS, 0.4f, 1.0f);
+        world.addSyncedBlockEvent(stop.pos, world.getBlockState(stop.pos).getBlock(), 1, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    //  Item transfer
+    // -----------------------------------------------------------------------
+
+    private boolean doInteract(ServerWorld world, RouteStop stop) {
         BlockEntity be = world.getBlockEntity(stop.pos);
         if (!(be instanceof Inventory inv)) return false;
 
-        // Play an appropriate open sound for the container type.
-        SoundEvent openSound  = world.getBlockState(stop.pos).isOf(Blocks.BARREL)
-                ? SoundEvents.BLOCK_BARREL_OPEN  : SoundEvents.BLOCK_CHEST_OPEN;
-        SoundEvent closeSound = world.getBlockState(stop.pos).isOf(Blocks.BARREL)
-                ? SoundEvents.BLOCK_BARREL_CLOSE : SoundEvents.BLOCK_CHEST_CLOSE;
-        world.playSound(null, stop.pos.getX() + 0.5, stop.pos.getY() + 0.5, stop.pos.getZ() + 0.5,
-                openSound, SoundCategory.BLOCKS, 0.4f, 1.0f);
-
-        // Take a mutable snapshot for uniform read/write, then sync back once.
         int size = inv.size();
         SimpleInventory snapshot = new SimpleInventory(size);
         for (int i = 0; i < size; i++) snapshot.setStack(i, inv.getStack(i).copy());
 
-        // Deliver before collecting so a BOTH stop restocks the container first.
         if (stop.doesDeliver()) {
             int given = worker.deliverItemsToInventory(snapshot, stop);
             NPClogistics.LOGGER.info("{} delivered {} items to {}",
@@ -128,9 +147,6 @@ public class WorkOrderBrain {
 
         for (int i = 0; i < size; i++) inv.setStack(i, snapshot.getStack(i));
         inv.markDirty();
-
-        world.playSound(null, stop.pos.getX() + 0.5, stop.pos.getY() + 0.5, stop.pos.getZ() + 0.5,
-                closeSound, SoundCategory.BLOCKS, 0.4f, 1.0f);
         return true;
     }
 
@@ -144,7 +160,6 @@ public class WorkOrderBrain {
             worker.onRouteComplete();
         } else {
             worker.setCurrentStopIndex(next);
-            // Stop any current navigation so it recalculates toward the new stop
             worker.getNavigation().stop();
         }
     }
