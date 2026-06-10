@@ -298,6 +298,7 @@ used as the flat `layer0` fallback.
 - [x] Sounds: chest/barrel open + close sounds on NPC container interaction
 - [x] Any `Inventory` block entity accepted as a route stop (chests, barrels, hoppers, droppers, shulker boxes, etc.)
 - [ ] CraftingTaskBrain: full navigation + crafting execution (currently stub)
+- [ ] Pathfinding: NPC walks on top of storage blocks en route (vanilla pathfinder takes shortest path over solid surfaces; needs custom navigation to route around)
 - [ ] Pathfinding: multi-dimension support
 - [ ] Sounds: footstep and work-complete sounds
 - [ ] Crafting recipe for Work Order Scroll and Location Tokens
