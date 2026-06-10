@@ -42,8 +42,9 @@ public class WorkOrderBrain {
     private enum Phase { IDLE, OPENING, CLOSING }
 
     private final LogisticsWorkerEntity worker;
-    private Phase phase    = Phase.IDLE;
-    private int phaseTimer = 0;
+    private Phase phase         = Phase.IDLE;
+    private int phaseTimer      = 0;
+    private boolean strictArrival = true; // false when no adjacent approach pos was found
 
     public WorkOrderBrain(LogisticsWorkerEntity worker) {
         this.worker = worker;
@@ -68,7 +69,7 @@ public class WorkOrderBrain {
 
         switch (phase) {
             case IDLE -> {
-                navigateToStop(stop);
+                navigateToStop(world, stop);
                 if (isAtStop(stop) && worker.getInteractionCooldown() == 0) {
                     openContainer(world, stop);
                     phase = Phase.OPENING;
@@ -101,19 +102,48 @@ public class WorkOrderBrain {
     //  Navigation
     // -----------------------------------------------------------------------
 
-    private void navigateToStop(RouteStop stop) {
+    private void navigateToStop(ServerWorld world, RouteStop stop) {
         if (!isAtStop(stop) && worker.getNavigation().isIdle()) {
-            worker.getNavigation().startMovingTo(
-                    stop.pos.getX() + 0.5,
-                    stop.pos.getY(),
-                    stop.pos.getZ() + 0.5,
-                    1.0
-            );
+            BlockPos approach = findApproachPos(world, stop.pos);
+            if (approach.equals(stop.pos)) {
+                // No clear adjacent position found (chest in a corner, etc.); fall back to
+                // the old behaviour — NPC may end up on top but will still interact.
+                strictArrival = false;
+                worker.getNavigation().startMovingTo(
+                        stop.pos.getX() + 0.5, stop.pos.getY(), stop.pos.getZ() + 0.5, 1.0);
+            } else {
+                strictArrival = true;
+                worker.getNavigation().startMovingTo(
+                        approach.getX() + 0.5, approach.getY(), approach.getZ() + 0.5, 1.0);
+            }
         }
     }
 
+    /**
+     * Returns a walkable position adjacent to {@code containerPos} so the NPC stands
+     * beside the container rather than on top of it. Checks the four cardinal neighbors;
+     * the first one with two clear blocks above a solid floor is chosen. Falls back to
+     * the container's own position if none is found (e.g. chest surrounded on all sides).
+     */
+    private static BlockPos findApproachPos(ServerWorld world, BlockPos containerPos) {
+        for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+            BlockPos candidate = containerPos.offset(dir);
+            BlockPos below = candidate.down();
+            if (world.getBlockState(candidate).isAir()
+                    && world.getBlockState(candidate.up()).isAir()
+                    && !world.getBlockState(below).isAir()) {
+                return candidate;
+            }
+        }
+        return containerPos;
+    }
+
     private boolean isAtStop(RouteStop stop) {
-        return worker.getPos().distanceTo(stop.pos.toCenterPos()) <= ARRIVAL_DISTANCE;
+        if (worker.getPos().distanceTo(stop.pos.toCenterPos()) > ARRIVAL_DISTANCE) return false;
+        // Reject arrival if the NPC is on top of the container and a proper adjacent approach
+        // position was found. Skipped when no adjacent position exists (strictArrival = false).
+        if (strictArrival && worker.getBlockPos().getY() > stop.pos.getY()) return false;
+        return true;
     }
 
     // -----------------------------------------------------------------------
