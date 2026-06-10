@@ -109,6 +109,10 @@ public class FarmerBrain {
             if (valid) {
                 phase = FarmerPhase.WORKING;
                 timer = WORK_TICKS;
+                // Equip the hoe now so the equipment packet syncs to clients before swingHand fires
+                if (target.type() == WorkType.HOE) {
+                    worker.setStackInHand(Hand.MAIN_HAND, worker.getRoleTool());
+                }
             } else {
                 phase = FarmerPhase.SCANNING;
                 timer = 0;
@@ -309,14 +313,13 @@ public class FarmerBrain {
     private void hoeBlock(ServerWorld world, BlockPos pos) {
         Block current = world.getBlockState(pos).getBlock();
         if (current != Blocks.DIRT && current != Blocks.GRASS_BLOCK) return;
-        // Show the hoe in hand and swing it before the till lands
-        ItemStack roleTool = worker.getRoleTool();
-        if (!roleTool.isEmpty()) worker.setStackInHand(Hand.MAIN_HAND, roleTool);
+        // Equipment was synced 20 ticks ago (in tickNavigating) — swing is now visible with hoe in hand
         worker.swingHand(Hand.MAIN_HAND);
         world.setBlockState(pos, Blocks.FARMLAND.getDefaultState());
         world.playSound(null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
                 SoundEvents.BLOCK_GRASS_BREAK, SoundCategory.BLOCKS, 1.0f, 1.0f);
         NPClogistics.LOGGER.info("{} tilled {} at {}", worker.getName().getString(), current, pos);
+        worker.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY); // put hoe away after swing
     }
 
     // ── Deposit ───────────────────────────────────────────────────────────────
