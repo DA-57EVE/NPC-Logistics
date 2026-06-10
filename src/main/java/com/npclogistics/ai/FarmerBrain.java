@@ -36,10 +36,13 @@ public class FarmerBrain {
 
     private record WorkTarget(BlockPos pos, WorkType type, Block cropBlock) {}
 
+    private static final int HARVESTS_PER_DEPOSIT = 6; // batch this many harvests before a deposit run
+
     private final LogisticsWorkerEntity worker;
-    private FarmerPhase phase  = FarmerPhase.SCANNING;
-    private WorkTarget  target = null;
-    private int         timer  = 0;
+    private FarmerPhase phase              = FarmerPhase.SCANNING;
+    private WorkTarget  target             = null;
+    private int         timer              = 0;
+    private int         harvestsSinceDeposit = 0;
 
     public FarmerBrain(LogisticsWorkerEntity worker) { this.worker = worker; }
 
@@ -63,7 +66,12 @@ public class FarmerBrain {
     private void tickScanning(ServerWorld world, BlockPos center) {
         if (--timer > 0) return;
 
-        if (isInventoryFull()) { beginDeposit(); return; }
+        // Deposit after a batch of harvests, or when the farm is exhausted
+        if (isInventoryFull() || harvestsSinceDeposit >= HARVESTS_PER_DEPOSIT) {
+            harvestsSinceDeposit = 0;
+            beginDeposit();
+            return;
+        }
 
         WorkTarget found = findNearestWork(world, center);
         if (found != null) {
@@ -72,7 +80,7 @@ public class FarmerBrain {
             worker.getNavigation().stop();
             NPClogistics.LOGGER.info("{} farmer targeting {} at {}", worker.getName().getString(), found.type(), found.pos());
         } else {
-            if (hasItemsToDeposit()) { beginDeposit(); return; }
+            if (hasItemsToDeposit()) { harvestsSinceDeposit = 0; beginDeposit(); return; }
             timer = SCAN_INTERVAL;
         }
     }
@@ -284,6 +292,7 @@ public class FarmerBrain {
             consumeItem(seed);
             world.setBlockState(pos, cropBlock.getDefaultState());
         }
+        harvestsSinceDeposit++;
         NPClogistics.LOGGER.info("{} harvested {} at {}", worker.getName().getString(), cropBlock, pos);
     }
 
