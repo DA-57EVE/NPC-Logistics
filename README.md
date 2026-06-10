@@ -381,7 +381,9 @@ used as the flat `layer0` fallback.
 - [x] Idle hoe-tilling: expands farmland at the farm edge (within 10 blocks of jobsite)
 - [x] Picks up dropped item entities in the full scan area (mob loot, missed drops)
 - [x] Realistic walking speed; approaches deposit chest from the side, not on top
-- [x] Hoe arm-swing animation when tilling
+- [x] Hoe arm-swing animation when tilling; hoe item shown in hand during the action
+- [x] Batched harvesting — collects up to 6 crops per deposit run; deposits immediately if farm runs dry
+- [x] Dropped-item pickup navigates correctly to items resting on farmland (y+1 fix)
 - [x] Two farmers share a jobsite cooperatively with no extra configuration
 
 ### Polish / future
