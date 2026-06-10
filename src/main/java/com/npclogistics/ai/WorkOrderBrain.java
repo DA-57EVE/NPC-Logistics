@@ -209,7 +209,7 @@ public class WorkOrderBrain {
      * returns the full 54-slot combined view rather than one half's 27 slots.
      * Falls back to a direct BlockEntity cast for barrels, hoppers, etc.
      */
-    private static Inventory resolveInventory(ServerWorld world, BlockPos pos) {
+    public static Inventory resolveInventory(ServerWorld world, BlockPos pos) {
         BlockState state = world.getBlockState(pos);
         if (state.getBlock() instanceof ChestBlock chestBlock) {
             // ignoreBlocked=true: NPC can access a chest even if a cat is sitting on it.

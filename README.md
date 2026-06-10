@@ -1,8 +1,9 @@
 # NPClogistics – NPC Logistics (Fabric 1.20.1)
 
 A Minecraft Fabric mod that adds **Logistics Worker NPCs** capable of executing
-item-collection and delivery routes across chests and barrels, and **Crafting Tasks**
-that direct workers to collect materials, craft items, and deposit the results.
+item-collection and delivery routes across chests and barrels, and **Role-based autonomous
+workers** that perform ongoing jobs — starting with a fully functional **Farmer** role that
+independently tills, plants, harvests, restocks seeds, and deposits produce.
 
 ---
 
@@ -40,7 +41,8 @@ src/
 ├── main/java/com/npclogistics/
 │   ├── NPClogistics.java               # Server entrypoint
 │   ├── ai/
-│   │   └── WorkOrderBrain.java         # Tick-based route execution AI
+│   │   ├── WorkOrderBrain.java         # Tick-based route execution AI
+│   │   └── FarmerBrain.java            # Farmer role state machine (scan/navigate/work/deposit)
 │   ├── command/
 │   │   └── WorkOrderCommand.java       # /workorder admin commands
 │   ├── data/
@@ -51,8 +53,10 @@ src/
 │   │   └── ModEntities.java            # Entity type + attribute registration
 │   ├── item/
 │   │   ├── WorkOrderScrollItem.java    # In-hand tool for recording routes
-│   │   ├── LocationTokenItem.java      # Location token item (Collect / Craft / Deposit)
+│   │   ├── LocationTokenItem.java      # Location token item — stores a stamped BlockPos
 │   │   └── ModItems.java               # Item registration
+│   ├── role/
+│   │   └── RoleRegistry.java           # Maps role-tool items to role brain types
 │   ├── screen/
 │   │   ├── EquipmentScreenHandler.java # Server-side handler for NPC Worker GUI
 │   │   └── ModScreenHandlers.java      # Screen handler registration
@@ -166,6 +170,23 @@ during delivery runs appear here. Slots are **take-only** — click or shift-cli
 retrieve items into your own inventory. You cannot place items into the cargo hold
 directly; workers fill it themselves during collection stops.
 
+#### Role tab
+
+Assign an autonomous **Role** to the worker using a three-slot kit:
+
+| Slot | Item | Purpose |
+|------|------|---------|
+| **Tool** | A hoe (any tier) | Activates the Farmer role |
+| **Jobsite Token** | Stamped Location Token | Centre of the work area |
+| **Deposit Token** | Stamped Location Token | Chest/barrel to deposit produce into |
+
+Stamp a **Location Token** by right-clicking any block — the tooltip will show the
+recorded coordinates. Once all three slots are filled with valid stamped tokens the
+status line reads **"Kit ready — activates on close"**. Close the screen to activate.
+
+The worker's role activates automatically and persists across server restarts via NBT.
+To remove a role, open the screen, take the items back out of the kit slots, and close.
+
 #### Tasks tab
 
 Set up **Crafting Tasks** — instructions for the worker to gather materials, craft
@@ -216,6 +237,47 @@ Hovering over an empty slot shows a colour-coded hint describing what goes there
 /kill @e[type=npclogistics:logistics_worker]
 /kill @e[type=npclogistics:logistics_worker,name="Ol Dave"]
 ```
+
+---
+
+## Farmer Role
+
+When equipped with a hoe tool, a stamped **Jobsite Token**, and a stamped **Deposit Token**,
+a worker operates as an autonomous farmer. No further input is needed after setup.
+
+### What the Farmer does
+
+The farmer runs a continuous state machine driven by a priority scan within **24 blocks**
+of the jobsite token's position:
+
+| Priority | Action | Detail |
+|----------|--------|--------|
+| 1 | **Pick up dropped items** | Collects item entities (e.g. mob loot) anywhere in the scan radius before doing any crop work |
+| 2 | **Harvest mature crops** | Breaks fully grown wheat, carrots, potatoes, or beetroot; replants from inventory in the same tick |
+| 3 | **Plant on empty farmland** | Seeds bare farmland blocks when seeds are available |
+| 4 | **Till adjacent dirt/grass** | Hoes bare dirt or grass blocks adjacent to existing farmland (within **10 blocks** of the jobsite) — gradually expands the farm footprint |
+
+After a harvest run the worker walks to the deposit chest at realistic speed, opens it,
+deposits all produce, restocks seeds (up to 16 of each type), then closes the chest and
+returns to scanning. Seed-only inventories do not trigger a deposit trip.
+
+### Setting up a farm
+
+1. Place a chest or barrel near your farm — this is the **deposit chest**.
+2. Pick a reference block at the centre of the farm area as the **jobsite**.
+3. Stamp two **Location Tokens** (right-click the relevant blocks).
+4. Open the worker's **Role tab**, place a hoe in the Tool slot and the stamped tokens
+   in the Jobsite and Deposit slots.
+5. Close the screen — the worker activates immediately.
+
+**Tips:**
+- Surround the farm with fencing or a wall to stop the worker tilling beyond your
+  intended boundary (the 10-block hoe radius is measured from the jobsite, not the
+  farm edge).
+- The worker collects all dropped items in the full 24-block scan radius — handy for
+  picking up mob loot near the farm automatically.
+- Two farmers sharing the same jobsite and deposit chest work cooperatively without
+  any configuration; they independently pick different targets.
 
 ---
 
@@ -287,21 +349,41 @@ used as the flat `layer0` fallback.
 
 ## Roadmap / TODO
 
+### Logistics (Work Order routes)
 - [x] GUI: per-stop item filter editor (click to add/remove items)
 - [x] GUI: drag-to-reorder stops
 - [x] Combined COLLECT + DELIVER at a single stop (deliver then collect, two filters)
-- [x] NPC Worker GUI (Equipment / Orders / Cargo / Tasks tabs)
+- [x] NPC Worker GUI (Equipment / Orders / Cargo / Tasks / Role tabs)
 - [x] Cargo tab — take-only view of the worker's 18-slot internal inventory
-- [x] Location Tokens with 3D coin models (Collect / Craft / Deposit)
-- [x] Crafting Task data model and task slot UI
 - [x] Worker employer system (claim, rename, skin URL)
 - [x] Sounds: chest/barrel open + close sounds on NPC container interaction
 - [x] Any `Inventory` block entity accepted as a route stop (chests, barrels, hoppers, droppers, shulker boxes, etc.)
+- [x] Support for double-chests and other mod storage blocks via Fabric Transfer API
 - [ ] CraftingTaskBrain: full navigation + crafting execution (currently stub)
-- [ ] Pathfinding: NPC walks on top of storage blocks en route (vanilla pathfinder takes shortest path over solid surfaces; needs custom navigation to route around)
+- [ ] Visual route overlay (coloured position beams)
+- [ ] Crafting recipe for Work Order Scroll and Location Tokens
+
+### Role system
+- [x] Role tab in NPC GUI — three-slot kit (Tool + Jobsite Token + Deposit Token)
+- [x] RoleRegistry — maps hoe item → Farmer role; extensible for future roles
+- [x] Kit validation with specific feedback (stamped/unstamped token detection)
+- [x] Role persists across server restarts via NBT
+- [x] Worker drops role kit items on death
+
+### Farmer role
+- [x] Harvests mature wheat, carrots, potatoes, and beetroot
+- [x] Replants from inventory immediately after harvesting
+- [x] Plants on bare farmland when seeds are available
+- [x] Deposits produce to chest; restocks seeds (up to 16 per type) on the same visit
+- [x] Seed-only inventory does not trigger a spurious deposit trip
+- [x] Idle hoe-tilling: expands farmland at the farm edge (within 10 blocks of jobsite)
+- [x] Picks up dropped item entities in the full scan area (mob loot, missed drops)
+- [x] Realistic walking speed; approaches deposit chest from the side, not on top
+- [x] Hoe arm-swing animation when tilling
+- [x] Two farmers share a jobsite cooperatively with no extra configuration
+
+### Polish / future
+- [ ] Additional roles: Miner, Woodcutter, Fisher
 - [ ] Pathfinding: multi-dimension support
 - [ ] Sounds: footstep and work-complete sounds
-- [ ] Crafting recipe for Work Order Scroll and Location Tokens
-- [ ] Visual route overlay (coloured position beams)
-- [x] Support for double-chests
-- [x] Support for other mod storage blocks via Fabric Transfer API
+- [ ] Location Tokens: visual beam at stamped position

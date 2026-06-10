@@ -1,5 +1,6 @@
 package com.npclogistics.screen;
 
+import com.npclogistics.NPClogistics;
 import com.npclogistics.data.CraftingTask;
 import com.npclogistics.entity.LogisticsWorkerEntity;
 import com.npclogistics.item.LocationTokenItem;
@@ -46,6 +47,18 @@ public class EquipmentScreenHandler extends ScreenHandler {
     public static final int TASK_CRAFT       = 2;
     public static final int TASK_DEPOSIT     = 3;
 
+    // Role kit: 3 slots (tool that defines the role, jobsite token, deposit token)
+    public static final int ROLE_SLOTS_START  = TASK_SLOTS_START + MAX_TASKS * 4; // 86
+    public static final int ROLE_SLOTS        = 3;
+    public static final int SLOT_ROLE_TOOL    = 0; // offset within role inventory
+    public static final int SLOT_ROLE_JOBSITE = 1;
+    public static final int SLOT_ROLE_DEPOSIT = 2;
+
+    // Role tab panel-local Y positions for the three role slots
+    public static final int ROLE_TOOL_Y    = 30;
+    public static final int ROLE_JOBSITE_Y = 56;
+    public static final int ROLE_DEPOSIT_Y = 82;
+
     // Slot Y positions — shared with EquipmentScreen for layout alignment
     public static final int INVENTORY_SLOT_Y = 163;
     public static final int HOTBAR_SLOT_Y    = 219;
@@ -75,6 +88,7 @@ public class EquipmentScreenHandler extends ScreenHandler {
     private final SimpleInventory equipmentInventory;
     private final SimpleInventory cargoInventory;
     private final SimpleInventory taskInventory;
+    private final SimpleInventory roleInventory;
 
     // ── Server-side constructor ───────────────────────────────────────────────
     public EquipmentScreenHandler(int syncId, PlayerInventory playerInventory,
@@ -102,6 +116,11 @@ public class EquipmentScreenHandler extends ScreenHandler {
         net.minecraft.inventory.SimpleInventory npcInv = worker.getWorkerInventory();
         for (int i = 0; i < NPC_INV_SLOTS; i++) cargoInventory.setStack(i, npcInv.getStack(i).copy());
 
+        this.roleInventory = new SimpleInventory(ROLE_SLOTS);
+        roleInventory.setStack(SLOT_ROLE_TOOL,    worker.getRoleTool().copy());
+        roleInventory.setStack(SLOT_ROLE_JOBSITE, worker.getRoleJobsite().copy());
+        roleInventory.setStack(SLOT_ROLE_DEPOSIT, worker.getRoleDeposit().copy());
+
         this.taskInventory = new SimpleInventory(MAX_TASKS * 4);
         UUID openingPlayer = playerInventory.player.getUuid();
         for (int i = 0; i < MAX_TASKS; i++) {
@@ -123,6 +142,7 @@ public class EquipmentScreenHandler extends ScreenHandler {
         addPlayerInventorySlots(playerInventory);
         addCargoSlots();
         addTaskSlots();
+        addRoleSlots();
     }
 
     private static ItemStack makeTokenForPos(BlockPos pos, LocationTokenItem.TokenType type) {
@@ -132,6 +152,7 @@ public class EquipmentScreenHandler extends ScreenHandler {
             case COLLECT -> com.npclogistics.item.ModItems.LOCATION_TOKEN_COLLECT;
             case CRAFT   -> com.npclogistics.item.ModItems.LOCATION_TOKEN_CRAFT;
             case DEPOSIT -> com.npclogistics.item.ModItems.LOCATION_TOKEN_DEPOSIT;
+            case JOBSITE -> com.npclogistics.item.ModItems.LOCATION_TOKEN_JOBSITE;
         };
         ItemStack stack = new ItemStack(item);
         LocationTokenItem.stampPos(stack, pos, "");
@@ -159,10 +180,12 @@ public class EquipmentScreenHandler extends ScreenHandler {
         this.equipmentInventory = new SimpleInventory(EQUIPMENT_SLOTS);
         this.cargoInventory     = new SimpleInventory(NPC_INV_SLOTS);
         this.taskInventory      = new SimpleInventory(MAX_TASKS * 4);
+        this.roleInventory      = new SimpleInventory(ROLE_SLOTS);
         addEquipmentSlots();
         addPlayerInventorySlots(playerInventory);
         addCargoSlots();
         addTaskSlots();
+        addRoleSlots();
     }
 
     // ── Slot registration ─────────────────────────────────────────────────────
@@ -203,6 +226,12 @@ public class EquipmentScreenHandler extends ScreenHandler {
             addSlot(new DisablableTokenSlot(taskInventory, i*4+TASK_CRAFT,   TASK_SLOT_X[2], ry, LocationTokenItem.TokenType.CRAFT));
             addSlot(new DisablableTokenSlot(taskInventory, i*4+TASK_DEPOSIT, TASK_SLOT_X[3], ry, LocationTokenItem.TokenType.DEPOSIT));
         }
+    }
+
+    private void addRoleSlots() {
+        addSlot(new RoleToolSlot(roleInventory,    SLOT_ROLE_TOOL,    8, ROLE_TOOL_Y));
+        addSlot(new DisablableTokenSlot(roleInventory, SLOT_ROLE_JOBSITE, 8, ROLE_JOBSITE_Y, LocationTokenItem.TokenType.JOBSITE));
+        addSlot(new DisablableTokenSlot(roleInventory, SLOT_ROLE_DEPOSIT, 8, ROLE_DEPOSIT_Y, LocationTokenItem.TokenType.DEPOSIT));
     }
 
     // ── Depositor stamping (WO slots) ─────────────────────────────────────────
@@ -276,6 +305,10 @@ public class EquipmentScreenHandler extends ScreenHandler {
                 ItemStack s = taskInventory.getStack(i);
                 if (!s.isEmpty() && !player.getInventory().insertStack(s)) player.dropItem(s, false);
             }
+            for (int i = 0; i < ROLE_SLOTS; i++) {
+                ItemStack s = roleInventory.getStack(i);
+                if (!s.isEmpty() && !player.getInventory().insertStack(s)) player.dropItem(s, false);
+            }
             return;
         }
 
@@ -326,6 +359,17 @@ public class EquipmentScreenHandler extends ScreenHandler {
                     taskRunOnce[i], isCompleted, addedBy, addedName));
         }
 
+        // Save role kit
+        worker.setRoleTool(roleInventory.getStack(SLOT_ROLE_TOOL).copy());
+        worker.setRoleJobsite(roleInventory.getStack(SLOT_ROLE_JOBSITE).copy());
+        worker.setRoleDeposit(roleInventory.getStack(SLOT_ROLE_DEPOSIT).copy());
+        NPClogistics.LOGGER.info("[Role] {} kit saved: tool={} jobsite_pos={} deposit_pos={} active={}",
+                worker.getName().getString(),
+                worker.getRoleTool().getItem(),
+                worker.getJobsitePos(),
+                worker.getDepositPos(),
+                worker.isRoleActive());
+
         worker.resumeAfterGUI();
     }
 
@@ -361,17 +405,27 @@ public class EquipmentScreenHandler extends ScreenHandler {
                 return ItemStack.EMPTY;
             }
         } else if (stack.getItem() instanceof LocationTokenItem token) {
-            // Shift-click token to first matching empty task slot
-            int col = switch (token.tokenType) {
-                case COLLECT -> TASK_SOURCE;
-                case CRAFT   -> TASK_CRAFT;
-                case DEPOSIT -> TASK_DEPOSIT;
-            };
-            for (int i = 0; i < MAX_TASKS; i++) {
-                int target = TASK_SLOTS_START + i * 4 + col;
-                if (!slots.get(target).hasStack()) {
+            if (token.tokenType == LocationTokenItem.TokenType.JOBSITE) {
+                // JOBSITE tokens go to the role jobsite slot
+                int target = ROLE_SLOTS_START + SLOT_ROLE_JOBSITE;
+                if (!slots.get(target).hasStack())
                     if (!insertItem(stack, target, target + 1, false)) return ItemStack.EMPTY;
-                    break;
+            } else {
+                // Other tokens go to the first matching empty task slot
+                int col = switch (token.tokenType) {
+                    case COLLECT -> TASK_SOURCE;
+                    case CRAFT   -> TASK_CRAFT;
+                    case DEPOSIT -> TASK_DEPOSIT;
+                    default      -> -1;
+                };
+                if (col >= 0) {
+                    for (int i = 0; i < MAX_TASKS; i++) {
+                        int target = TASK_SLOTS_START + i * 4 + col;
+                        if (!slots.get(target).hasStack()) {
+                            if (!insertItem(stack, target, target + 1, false)) return ItemStack.EMPTY;
+                            break;
+                        }
+                    }
                 }
             }
         } else {
@@ -448,6 +502,11 @@ public class EquipmentScreenHandler extends ScreenHandler {
     public static class CargoSlot extends DisablableSlot {
         CargoSlot(Inventory inv, int index, int x, int y) { super(inv, index, x, y); }
         @Override public boolean canInsert(ItemStack s) { return false; }
+    }
+
+    private static class RoleToolSlot extends DisablableSlot {
+        RoleToolSlot(Inventory inv, int index, int x, int y) { super(inv, index, x, y); }
+        @Override public int getMaxItemCount() { return 1; }
     }
 
     public static class DisablableTokenSlot extends DisablableSlot {

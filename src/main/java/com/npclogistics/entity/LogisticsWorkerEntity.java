@@ -1,9 +1,13 @@
 package com.npclogistics.entity;
 
 import com.npclogistics.NPClogistics;
+import com.npclogistics.ai.FarmerBrain;
 import com.npclogistics.ai.WorkOrderBrain;
 import com.npclogistics.data.CraftingTask;
+import com.npclogistics.data.NpcRole;
+import com.npclogistics.data.RoleRegistry;
 import com.npclogistics.data.WorkOrder;
+import com.npclogistics.item.LocationTokenItem;
 import com.npclogistics.data.WorkOrder.QtyMode;
 import com.npclogistics.data.WorkOrder.RouteStop;
 import com.npclogistics.data.WorkOrder.StopAction;
@@ -88,6 +92,16 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     // The dedicated AI brain for route execution
     private final WorkOrderBrain workOrderBrain;
 
+    // ── Role kit ──────────────────────────────────────────────────────────────
+    // All three must be filled for the role to activate. While active, work orders
+    // and crafting tasks are bypassed and the role brain handles all behaviour.
+    private ItemStack roleTool    = ItemStack.EMPTY; // hoe → FARMER, etc.
+    private ItemStack roleJobsite = ItemStack.EMPTY; // JOBSITE token (centre of work area)
+    private ItemStack roleDeposit = ItemStack.EMPTY; // DEPOSIT token (where output goes)
+    private boolean roleWasActive = false;            // for transition logging only
+
+    private final FarmerBrain farmerBrain;
+
     // Work-order scroll slots — items placed by players via the equipment GUI.
     // Depositor UUID is stamped into the scroll's own NBT ("depositedBy").
     private ItemStack woScroll1 = ItemStack.EMPTY;
@@ -124,6 +138,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     public LogisticsWorkerEntity(EntityType<? extends PathAwareEntity> type, World world) {
         super(type, world);
         workOrderBrain = new WorkOrderBrain(this);
+        farmerBrain    = new FarmerBrain(this);
     }
 
     public static DefaultAttributeContainer.Builder createAttributes() {
@@ -147,6 +162,33 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     public ItemStack getWoScroll2() { return woScroll2; }
     public void setWoScroll1(ItemStack s) { woScroll1 = s.isEmpty() ? ItemStack.EMPTY : s; }
     public void setWoScroll2(ItemStack s) { woScroll2 = s.isEmpty() ? ItemStack.EMPTY : s; }
+
+    // Role kit access
+    public ItemStack getRoleTool()    { return roleTool; }
+    public ItemStack getRoleJobsite() { return roleJobsite; }
+    public ItemStack getRoleDeposit() { return roleDeposit; }
+    public void setRoleTool(ItemStack s)    { roleTool    = s.isEmpty() ? ItemStack.EMPTY : s; }
+    public void setRoleJobsite(ItemStack s) { roleJobsite = s.isEmpty() ? ItemStack.EMPTY : s; }
+    public void setRoleDeposit(ItemStack s) { roleDeposit = s.isEmpty() ? ItemStack.EMPTY : s; }
+
+    /** True when all three role slots carry valid items — overrides work orders while active. */
+    public boolean isRoleActive() {
+        return RoleRegistry.roleFor(roleTool) != null
+                && LocationTokenItem.hasPos(roleJobsite)
+                && LocationTokenItem.hasPos(roleDeposit);
+    }
+
+    public NpcRole activeRole() {
+        return isRoleActive() ? RoleRegistry.roleFor(roleTool) : null;
+    }
+
+    public BlockPos getJobsitePos() {
+        return LocationTokenItem.hasPos(roleJobsite) ? LocationTokenItem.getPos(roleJobsite) : null;
+    }
+
+    public BlockPos getDepositPos() {
+        return LocationTokenItem.hasPos(roleDeposit) ? LocationTokenItem.getPos(roleDeposit) : null;
+    }
 
     // Employer access
     public UUID getEmployerUUID()           { return employerUUID; }
@@ -322,6 +364,22 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         if (getWorld().isClient) return;
 
         if (interactionCooldown > 0) interactionCooldown--;
+
+        // Role has highest priority: while all three kit slots are filled, the farmer
+        // (or other role) brain handles all movement and action — work orders/tasks ignored.
+        if (isRoleActive()) {
+            if (!roleWasActive) {
+                NPClogistics.LOGGER.info("{} role activated: {} (jobsite={} deposit={})",
+                        getName().getString(), activeRole(), getJobsitePos(), getDepositPos());
+                roleWasActive = true;
+            }
+            farmerBrain.tick((ServerWorld) getWorld());
+            return;
+        }
+        if (roleWasActive) {
+            NPClogistics.LOGGER.info("{} role deactivated.", getName().getString());
+            roleWasActive = false;
+        }
 
         switch (state) {
             case EXECUTING       -> workOrderBrain.tick((ServerWorld) getWorld());
@@ -556,6 +614,22 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         return delivered;
     }
 
+    public ItemStack addToWorkerInventory(ItemStack stack) { return addToInventory(stack); }
+
+    @Override
+    protected void dropInventory() {
+        super.dropInventory();
+        for (int i = 0; i < inventory.size(); i++) {
+            ItemStack s = inventory.getStack(i);
+            if (!s.isEmpty()) dropStack(s);
+        }
+        if (!woScroll1.isEmpty()) dropStack(woScroll1);
+        if (!woScroll2.isEmpty()) dropStack(woScroll2);
+        if (!roleTool.isEmpty())    dropStack(roleTool);
+        if (!roleJobsite.isEmpty()) dropStack(roleJobsite);
+        if (!roleDeposit.isEmpty()) dropStack(roleDeposit);
+    }
+
     private ItemStack addToInventory(ItemStack stack) {
         for (int i = 0; i < inventory.size() && !stack.isEmpty(); i++) {
             ItemStack slot = inventory.getStack(i);
@@ -633,6 +707,10 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         }
         nbt.put("craftingTasks", taskList);
 
+        if (!roleTool.isEmpty())    nbt.put("roleTool",    roleTool.writeNbt(new NbtCompound()));
+        if (!roleJobsite.isEmpty()) nbt.put("roleJobsite", roleJobsite.writeNbt(new NbtCompound()));
+        if (!roleDeposit.isEmpty()) nbt.put("roleDeposit", roleDeposit.writeNbt(new NbtCompound()));
+
         if (activeWorkOrder != null) {
             nbt.put("workOrder", activeWorkOrder.toNbt());
         }
@@ -674,6 +752,10 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
                 }
             }
         }
+
+        roleTool    = nbt.contains("roleTool")    ? ItemStack.fromNbt(nbt.getCompound("roleTool"))    : ItemStack.EMPTY;
+        roleJobsite = nbt.contains("roleJobsite") ? ItemStack.fromNbt(nbt.getCompound("roleJobsite")) : ItemStack.EMPTY;
+        roleDeposit = nbt.contains("roleDeposit") ? ItemStack.fromNbt(nbt.getCompound("roleDeposit")) : ItemStack.EMPTY;
 
         if (nbt.contains("workOrder")) {
             activeWorkOrder = WorkOrder.fromNbt(nbt.getCompound("workOrder"));

@@ -38,6 +38,13 @@ public class ModItems {
             new LocationTokenItem(new FabricItemSettings().maxCount(1), LocationTokenItem.TokenType.DEPOSIT)
     );
 
+    /** Purple — records a position as the centre of a role worker's job site (e.g. farm centre). */
+    public static final LocationTokenItem LOCATION_TOKEN_JOBSITE = Registry.register(
+            Registries.ITEM,
+            new Identifier(NPClogistics.MOD_ID, "location_token_jobsite"),
+            new LocationTokenItem(new FabricItemSettings().maxCount(1), LocationTokenItem.TokenType.JOBSITE)
+    );
+
     public static void register() {
         NPClogistics.LOGGER.info("Registering mod items...");
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
@@ -45,6 +52,7 @@ public class ModItems {
             entries.add(LOCATION_TOKEN_COLLECT);
             entries.add(LOCATION_TOKEN_CRAFT);
             entries.add(LOCATION_TOKEN_DEPOSIT);
+            entries.add(LOCATION_TOKEN_JOBSITE);
         });
     }
 }

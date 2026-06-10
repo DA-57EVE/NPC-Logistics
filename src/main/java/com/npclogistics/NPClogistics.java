@@ -113,6 +113,7 @@ public class NPClogistics implements ModInitializer {
         return switch (type) {
             case COLLECT, DEPOSIT -> world.getBlockEntity(pos) instanceof Inventory;
             case CRAFT             -> world.getBlockState(pos).isOf(Blocks.CRAFTING_TABLE);
+            case JOBSITE           -> !world.getBlockState(pos).isAir();
         };
     }
 }

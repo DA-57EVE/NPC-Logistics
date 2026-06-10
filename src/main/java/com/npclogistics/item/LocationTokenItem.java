@@ -16,7 +16,8 @@ public class LocationTokenItem extends Item {
     public enum TokenType {
         COLLECT("Collect Token", "Source: collect items from here"),
         CRAFT("Craft Token",     "Bench: craft items at this block"),
-        DEPOSIT("Deposit Token", "Deposit: store crafted items here");
+        DEPOSIT("Deposit Token", "Deposit: store crafted items here"),
+        JOBSITE("Jobsite Token", "Jobsite: centre of the work area");
 
         public final String defaultName;
         public final String description;

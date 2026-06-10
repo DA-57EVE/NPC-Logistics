@@ -28,7 +28,11 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     private static final int TAB_ORDERS     = 1;
     private static final int TAB_CARGO      = 2;
     private static final int TAB_TASKS      = 3;
+    private static final int TAB_ROLE       = 4;
     private int activeTab = TAB_EQUIPMENT;
+
+    private static final int C_ROLE_ACTIVE  = 0xFF44BB44;
+    private static final int C_ROLE_INACTIVE = 0xFF665555;
 
     // ── Colours ───────────────────────────────────────────────────────────────
     private static final int C_PANEL    = 0xEE0E1216;
@@ -85,6 +89,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     private ButtonWidget tabOrders;
     private ButtonWidget tabCargo;
     private ButtonWidget tabTasks;
+    private ButtonWidget tabRole;
 
     // Per-task-row toggle and delete buttons (built in init)
     private final ButtonWidget[] toggleButtons = new ButtonWidget[MAX_T];
@@ -112,22 +117,26 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         titleY = 6;
         playerInventoryTitleY = INV_LABEL_Y;
 
-        // Four tabs above the panel, evenly split across the full width
+        // Five tabs above the panel — each 40px wide, flush edge-to-edge
         tabEquip = addDrawableChild(ButtonWidget.builder(
-                Text.literal("Equipment"), btn -> switchTab(TAB_EQUIPMENT))
-                .dimensions(x + 2, y - 14, 56, 13).build());
+                Text.literal("Equip"), btn -> switchTab(TAB_EQUIPMENT))
+                .dimensions(x + 0, y - 14, 40, 13).build());
 
         tabOrders = addDrawableChild(ButtonWidget.builder(
                 Text.literal("Orders"), btn -> switchTab(TAB_ORDERS))
-                .dimensions(x + 60, y - 14, 44, 13).build());
+                .dimensions(x + 40, y - 14, 40, 13).build());
 
         tabCargo = addDrawableChild(ButtonWidget.builder(
                 Text.literal("Cargo"), btn -> switchTab(TAB_CARGO))
-                .dimensions(x + 106, y - 14, 44, 13).build());
+                .dimensions(x + 80, y - 14, 40, 13).build());
 
         tabTasks = addDrawableChild(ButtonWidget.builder(
                 Text.literal("Tasks"), btn -> switchTab(TAB_TASKS))
-                .dimensions(x + 152, y - 14, 46, 13).build());
+                .dimensions(x + 120, y - 14, 40, 13).build());
+
+        tabRole = addDrawableChild(ButtonWidget.builder(
+                Text.literal("Role"), btn -> switchTab(TAB_ROLE))
+                .dimensions(x + 160, y - 14, 40, 13).build());
 
         // Profile fields (Equipment tab only)
         nameField = addDrawableChild(new TextFieldWidget(textRenderer,
@@ -193,6 +202,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         boolean equip = (tab == TAB_EQUIPMENT);
         boolean cargo = (tab == TAB_CARGO);
         boolean tasks = (tab == TAB_TASKS);
+        boolean role  = (tab == TAB_ROLE);
 
         nameField.visible    = equip;
         skinUrlField.visible = equip;
@@ -204,12 +214,10 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
             deleteButtons[i].visible = tasks;
         }
 
-        // Equipment: armor+hand visible, WO visible
-        // Orders:    armor+hand hidden,  WO visible
-        // Cargo/Tasks: all equipment hidden
         repositionTaskSlots(tasks);
         setCargoActive(cargo);
-        setEquipmentActive(equip, !tasks && !cargo);
+        setEquipmentActive(equip, !tasks && !cargo && !role);
+        setRoleActive(role);
     }
 
     private void setCargoActive(boolean active) {
@@ -229,6 +237,14 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         for (int i = EquipmentScreenHandler.SLOT_WO1; i < EquipmentScreenHandler.EQUIPMENT_SLOTS; i++) {
             if (handler.slots.get(i) instanceof EquipmentScreenHandler.DisablableSlot ds)
                 ds.setActive(wo);
+        }
+    }
+
+    private void setRoleActive(boolean active) {
+        for (int i = 0; i < EquipmentScreenHandler.ROLE_SLOTS; i++) {
+            int idx = EquipmentScreenHandler.ROLE_SLOTS_START + i;
+            if (handler.slots.get(idx) instanceof EquipmentScreenHandler.DisablableSlot ds)
+                ds.setActive(active);
         }
     }
 
@@ -270,6 +286,32 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
                     context.drawItemTooltip(textRenderer, slot.getStack(), mouseX, mouseY);
                     return;
                 }
+                // Role-slot hints
+                if (activeTab == TAB_ROLE) {
+                    int idx = handler.slots.indexOf(slot);
+                    int off = idx - EquipmentScreenHandler.ROLE_SLOTS_START;
+                    if (off == EquipmentScreenHandler.SLOT_ROLE_TOOL) {
+                        context.drawTooltip(textRenderer, List.of(
+                                Text.literal("Role Tool").formatted(Formatting.WHITE),
+                                Text.literal("Place a hoe here to activate Farmer role").formatted(Formatting.DARK_GRAY)
+                        ), mouseX, mouseY);
+                        return;
+                    } else if (off == EquipmentScreenHandler.SLOT_ROLE_JOBSITE) {
+                        context.drawTooltip(textRenderer, List.of(
+                                Text.literal("Jobsite Token").formatted(Formatting.AQUA),
+                                Text.literal("Set a Jobsite Token to the farm centre").formatted(Formatting.DARK_GRAY)
+                        ), mouseX, mouseY);
+                        return;
+                    } else if (off == EquipmentScreenHandler.SLOT_ROLE_DEPOSIT) {
+                        context.drawTooltip(textRenderer, List.of(
+                                Text.literal("Deposit Token").formatted(Formatting.GREEN),
+                                Text.literal("Set a Deposit Token to the output chest").formatted(Formatting.DARK_GRAY)
+                        ), mouseX, mouseY);
+                        return;
+                    }
+                    continue;
+                }
+
                 // Empty task-slot type hints (cargo slots have no hint text)
                 if (activeTab != TAB_TASKS) continue;
                 int idx = handler.slots.indexOf(slot);
@@ -337,7 +379,8 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         if      (activeTab == TAB_EQUIPMENT) drawEquipBg(ctx, mx, my);
         else if (activeTab == TAB_ORDERS)    drawOrdersBg(ctx, mx, my);
         else if (activeTab == TAB_CARGO)     drawCargoBg(ctx, mx, my);
-        else                                 drawTasksBg(ctx, mx, my);
+        else if (activeTab == TAB_TASKS)     drawTasksBg(ctx, mx, my);
+        else                                 drawRoleBg(ctx, mx, my);
 
         // Inventory section (all tabs)
         ctx.fill(x + 7, y + SEP2_Y,     x + 193, y + SEP2_Y + 1, C_BORDER);
@@ -418,6 +461,16 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         }
     }
 
+    private void drawRoleBg(DrawContext ctx, int mx, int my) {
+        ctx.fill(x + 7, y + 16, x + 193, y + SEP1_Y, 0xFF0A1520);
+        border(ctx, x + 7, y + 16, x + 193, y + SEP1_Y);
+        slotBg(ctx, x + 8, y + EquipmentScreenHandler.ROLE_TOOL_Y);
+        slotBgTinted(ctx, x + 8, y + EquipmentScreenHandler.ROLE_JOBSITE_Y, 0xFF446688);
+        slotBgTinted(ctx, x + 8, y + EquipmentScreenHandler.ROLE_DEPOSIT_Y, 0xFF226633);
+        ctx.fill(x + 7, y + SEP1_Y,     x + 193, y + SEP1_Y + 1, C_BORDER);
+        ctx.fill(x + 7, y + SEP1_Y + 1, x + 193, y + SEP2_Y,     C_PANEL);
+    }
+
     @Override
     protected void drawForeground(DrawContext ctx, int mx, int my) {
         Text t = buildTitle();
@@ -426,7 +479,8 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         if      (activeTab == TAB_EQUIPMENT) drawEquipFg(ctx);
         else if (activeTab == TAB_ORDERS)    drawOrdersFg(ctx);
         else if (activeTab == TAB_CARGO)     drawCargoFg(ctx);
-        else                                 drawTasksFg(ctx);
+        else if (activeTab == TAB_TASKS)     drawTasksFg(ctx);
+        else                                 drawRoleFg(ctx);
 
         ctx.drawText(textRenderer, "Inventory", 8, INV_LABEL_Y, C_MUTED, false);
     }
@@ -522,6 +576,59 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
                             : Text.literal("Delete task")
                                     .append(Text.literal("\nAdded by: " + addedBy).formatted(Formatting.GRAY))));
         }
+    }
+
+    private void drawRoleFg(DrawContext ctx) {
+        ctx.drawText(textRenderer, "ROLE KIT", 10, 19, C_ACCENT, false);
+
+        int ty = EquipmentScreenHandler.ROLE_TOOL_Y;
+        int jy = EquipmentScreenHandler.ROLE_JOBSITE_Y;
+        int dy = EquipmentScreenHandler.ROLE_DEPOSIT_Y;
+
+        ctx.drawText(textRenderer, "Tool",          28, ty + 5, C_MUTED, false);
+        ctx.drawText(textRenderer, "Jobsite Token", 28, jy + 5, C_MUTED, false);
+        ctx.drawText(textRenderer, "Deposit Token", 28, dy + 5, C_MUTED, false);
+
+        ItemStack toolStack    = handler.slots.get(EquipmentScreenHandler.ROLE_SLOTS_START + EquipmentScreenHandler.SLOT_ROLE_TOOL).getStack();
+        ItemStack jobsiteStack = handler.slots.get(EquipmentScreenHandler.ROLE_SLOTS_START + EquipmentScreenHandler.SLOT_ROLE_JOBSITE).getStack();
+        ItemStack depositStack = handler.slots.get(EquipmentScreenHandler.ROLE_SLOTS_START + EquipmentScreenHandler.SLOT_ROLE_DEPOSIT).getStack();
+
+        boolean hasTool    = !toolStack.isEmpty();
+        boolean hasJobsite = !jobsiteStack.isEmpty() && LocationTokenItem.hasPos(jobsiteStack);
+        boolean hasDeposit = !depositStack.isEmpty() && LocationTokenItem.hasPos(depositStack);
+
+        String statusText;
+        int statusColor;
+        if (hasTool && hasJobsite && hasDeposit) {
+            statusText  = "Kit ready — activates on close";
+            statusColor = C_ROLE_ACTIVE;
+        } else if (!hasTool) {
+            statusText  = "Needs a hoe in the Tool slot";
+            statusColor = C_MUTED;
+        } else if (jobsiteStack.isEmpty()) {
+            statusText  = "Needs a Jobsite Token (stamped)";
+            statusColor = C_MUTED;
+        } else if (!hasJobsite) {
+            statusText  = "Jobsite Token not stamped — right-click a block";
+            statusColor = C_ROLE_INACTIVE;
+        } else if (depositStack.isEmpty()) {
+            statusText  = "Needs a Deposit Token (stamped)";
+            statusColor = C_MUTED;
+        } else {
+            statusText  = "Deposit Token not stamped — right-click a block";
+            statusColor = C_ROLE_INACTIVE;
+        }
+        ctx.drawText(textRenderer, statusText, 10, 108, statusColor, false);
+    }
+
+    private boolean isRoleKitFilled() {
+        if (handler.slots.size() <= EquipmentScreenHandler.ROLE_SLOTS_START + 2) return false;
+        ItemStack toolStack    = handler.slots.get(EquipmentScreenHandler.ROLE_SLOTS_START + EquipmentScreenHandler.SLOT_ROLE_TOOL).getStack();
+        ItemStack jobsiteStack = handler.slots.get(EquipmentScreenHandler.ROLE_SLOTS_START + EquipmentScreenHandler.SLOT_ROLE_JOBSITE).getStack();
+        ItemStack depositStack = handler.slots.get(EquipmentScreenHandler.ROLE_SLOTS_START + EquipmentScreenHandler.SLOT_ROLE_DEPOSIT).getStack();
+        return !toolStack.isEmpty()
+                && !jobsiteStack.isEmpty() && LocationTokenItem.hasPos(jobsiteStack)
+                && !depositStack.isEmpty() && LocationTokenItem.hasPos(depositStack);
     }
 
     // ── Invoice helpers (Orders tab) ──────────────────────────────────────────
