@@ -1,3 +1,5 @@
+![NPClogistics](npclogistics_banner.svg)
+
 # NPClogistics – NPC Logistics (Fabric 1.20.1)
 
 A Minecraft Fabric mod that adds **Logistics Worker NPCs** capable of executing

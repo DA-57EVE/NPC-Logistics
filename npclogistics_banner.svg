@@ -1,0 +1,177 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Background -->
+  <rect width="1280" height="640" fill="#0f111a"/>
+
+  <!-- Faint background grid dots -->
+  <g opacity="0.045" fill="#1bd96a">
+    <circle cx="80"  cy="80"  r="2"/><circle cx="160" cy="80"  r="2"/><circle cx="240" cy="80"  r="2"/>
+    <circle cx="320" cy="80"  r="2"/><circle cx="400" cy="80"  r="2"/><circle cx="480" cy="80"  r="2"/>
+    <circle cx="560" cy="80"  r="2"/><circle cx="640" cy="80"  r="2"/><circle cx="720" cy="80"  r="2"/>
+    <circle cx="800" cy="80"  r="2"/><circle cx="880" cy="80"  r="2"/><circle cx="960" cy="80"  r="2"/>
+    <circle cx="1040" cy="80" r="2"/><circle cx="1120" cy="80" r="2"/><circle cx="1200" cy="80" r="2"/>
+    <circle cx="80"  cy="160" r="2"/><circle cx="160" cy="160" r="2"/><circle cx="240" cy="160" r="2"/>
+    <circle cx="320" cy="160" r="2"/><circle cx="400" cy="160" r="2"/><circle cx="480" cy="160" r="2"/>
+    <circle cx="560" cy="160" r="2"/><circle cx="640" cy="160" r="2"/><circle cx="720" cy="160" r="2"/>
+    <circle cx="800" cy="160" r="2"/><circle cx="880" cy="160" r="2"/><circle cx="960" cy="160" r="2"/>
+    <circle cx="1040" cy="160" r="2"/><circle cx="1120" cy="160" r="2"/><circle cx="1200" cy="160" r="2"/>
+    <circle cx="80"  cy="240" r="2"/><circle cx="160" cy="240" r="2"/><circle cx="240" cy="240" r="2"/>
+    <circle cx="320" cy="240" r="2"/><circle cx="400" cy="240" r="2"/><circle cx="480" cy="240" r="2"/>
+    <circle cx="80"  cy="320" r="2"/><circle cx="160" cy="320" r="2"/><circle cx="240" cy="320" r="2"/>
+    <circle cx="320" cy="320" r="2"/><circle cx="400" cy="320" r="2"/>
+    <circle cx="80"  cy="400" r="2"/><circle cx="160" cy="400" r="2"/><circle cx="240" cy="400" r="2"/>
+    <circle cx="320" cy="400" r="2"/><circle cx="400" cy="400" r="2"/>
+    <circle cx="80"  cy="480" r="2"/><circle cx="160" cy="480" r="2"/><circle cx="240" cy="480" r="2"/>
+    <circle cx="320" cy="480" r="2"/><circle cx="400" cy="480" r="2"/>
+    <circle cx="560" cy="240" r="2"/><circle cx="640" cy="240" r="2"/><circle cx="720" cy="240" r="2"/>
+    <circle cx="800" cy="240" r="2"/><circle cx="880" cy="240" r="2"/><circle cx="960" cy="240" r="2"/>
+    <circle cx="1040" cy="240" r="2"/><circle cx="1120" cy="240" r="2"/><circle cx="1200" cy="240" r="2"/>
+    <circle cx="560" cy="320" r="2"/><circle cx="640" cy="320" r="2"/><circle cx="720" cy="320" r="2"/>
+    <circle cx="800" cy="320" r="2"/><circle cx="880" cy="320" r="2"/><circle cx="960" cy="320" r="2"/>
+    <circle cx="1040" cy="320" r="2"/><circle cx="1120" cy="320" r="2"/><circle cx="1200" cy="320" r="2"/>
+    <circle cx="560" cy="400" r="2"/><circle cx="640" cy="400" r="2"/><circle cx="720" cy="400" r="2"/>
+    <circle cx="800" cy="400" r="2"/><circle cx="960" cy="400" r="2"/>
+    <circle cx="1040" cy="400" r="2"/><circle cx="1120" cy="400" r="2"/><circle cx="1200" cy="400" r="2"/>
+    <circle cx="560" cy="480" r="2"/><circle cx="640" cy="480" r="2"/><circle cx="720" cy="480" r="2"/>
+    <circle cx="800" cy="480" r="2"/><circle cx="960" cy="480" r="2"/>
+    <circle cx="1040" cy="480" r="2"/><circle cx="1120" cy="480" r="2"/><circle cx="1200" cy="480" r="2"/>
+    <circle cx="80"  cy="560" r="2"/><circle cx="160" cy="560" r="2"/><circle cx="240" cy="560" r="2"/>
+    <circle cx="320" cy="560" r="2"/><circle cx="400" cy="560" r="2"/>
+  </g>
+
+  <!-- Left panel dark overlay (text readability) -->
+  <rect x="0" y="0" width="520" height="640" fill="#0f111a" opacity="0.7"/>
+
+  <!-- Vertical separator -->
+  <line x1="500" y1="60" x2="500" y2="580" stroke="#1bd96a" stroke-width="0.8" opacity="0.18"/>
+
+  <!-- ═══ TITLE TEXT ═══ -->
+  <text x="68" y="218" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="108" font-weight="700" fill="#e8eaf6" letter-spacing="-2">NPC</text>
+  <text x="68" y="346" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="108" font-weight="700" fill="#1bd96a" letter-spacing="-2">Logistics</text>
+
+  <!-- Tagline -->
+  <text x="70" y="406" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="22" fill="#7c7f9e">Automate item collection &amp; delivery</text>
+  <text x="70" y="436" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="22" fill="#7c7f9e">with programmable worker NPCs</text>
+
+  <!-- Tags -->
+  <rect x="70"  y="490" width="90"  height="32" rx="8" fill="#1a2a40"/>
+  <text x="115" y="511" font-family="'Segoe UI', Arial, sans-serif" font-size="14"
+        font-weight="700" fill="#7ab4f5" text-anchor="middle">Fabric</text>
+
+  <rect x="172" y="490" width="90"  height="32" rx="8" fill="#1a2a1a"/>
+  <text x="217" y="511" font-family="'Segoe UI', Arial, sans-serif" font-size="14"
+        font-weight="700" fill="#5ecf8a" text-anchor="middle">1.20.1</text>
+
+  <rect x="274" y="490" width="68"  height="32" rx="8" fill="#1a1a2a"/>
+  <text x="308" y="511" font-family="'Segoe UI', Arial, sans-serif" font-size="14"
+        font-weight="700" fill="#a0a0cc" text-anchor="middle">MIT</text>
+
+  <!-- ═══ ROUTE SCENE (right panel) ═══ -->
+
+  <!-- Route glow behind worker -->
+  <circle cx="900" cy="330" r="220" fill="#1bd96a" opacity="0.025"/>
+  <circle cx="900" cy="330" r="140" fill="#1bd96a" opacity="0.035"/>
+
+  <!-- Route dashed line -->
+  <line x1="545" y1="348" x2="1210" y2="348"
+        stroke="#1bd96a" stroke-width="3" stroke-dasharray="16,10" opacity="0.2"/>
+
+  <!-- ═══ STOP 1 — completed (blue) ═══ -->
+  <rect x="532" y="316" width="78" height="64" rx="10" fill="#185fa5"/>
+  <rect x="532" y="316" width="78" height="25" rx="10" fill="#1e70c0"/>
+  <rect x="556" y="337" width="24" height="16" rx="4" fill="#0c447c"/>
+  <rect x="558" y="339" width="9"  height="8"  rx="2" fill="#3a80d4"/>
+  <!-- badge -->
+  <circle cx="571" cy="298" r="18" fill="#0a180e" stroke="#0f6e56" stroke-width="3"/>
+  <polyline points="562,298 570,306 582,289" fill="none" stroke="#1bd96a"
+            stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Arrow 1 -->
+  <line x1="614" y1="348" x2="686" y2="348" stroke="#1bd96a" stroke-width="3" opacity="0.6"/>
+  <polygon points="686,339 701,348 686,357" fill="#1bd96a" opacity="0.6"/>
+
+  <!-- ═══ STOP 2 — completed (teal) ═══ -->
+  <rect x="706" y="316" width="78" height="64" rx="10" fill="#0f6e56"/>
+  <rect x="706" y="316" width="78" height="25" rx="10" fill="#1d9e75"/>
+  <rect x="730" y="337" width="24" height="16" rx="4" fill="#085041"/>
+  <rect x="732" y="339" width="9"  height="8"  rx="2" fill="#3ecf8a"/>
+  <!-- badge -->
+  <circle cx="745" cy="298" r="18" fill="#0a180e" stroke="#0f6e56" stroke-width="3"/>
+  <polyline points="736,298 744,306 756,289" fill="none" stroke="#1bd96a"
+            stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Arrow 2 -->
+  <line x1="788" y1="348" x2="798" y2="348" stroke="#1bd96a" stroke-width="3" opacity="0.6"/>
+
+  <!-- ═══ WORKER — active at stop 3 ═══ -->
+  <!-- outer pulse ring -->
+  <circle cx="900" cy="330" r="118" fill="#0b1b0b" stroke="#1bd96a"
+          stroke-width="2.5" stroke-dasharray="12,8" opacity="0.4"/>
+  <!-- green circle -->
+  <circle cx="900" cy="330" r="103" fill="#1bd96a"/>
+
+  <!-- NPC figure (centred at 900, 330) -->
+  <!-- hard hat dome -->
+  <rect x="882" y="252" width="36" height="26" rx="10" fill="#f0a022"/>
+  <!-- hard hat brim -->
+  <rect x="872" y="274" width="56" height="10"  rx="5"  fill="#f0a022"/>
+  <!-- head -->
+  <rect x="884" y="282" width="32" height="30"  rx="8"  fill="#f5d6a0"/>
+  <!-- eyes -->
+  <circle cx="892" cy="296" r="3"   fill="#7a5530"/>
+  <circle cx="910" cy="296" r="3"   fill="#7a5530"/>
+  <!-- body -->
+  <rect x="878" y="312" width="44" height="36"  rx="7"  fill="#0f6e56"/>
+  <!-- left arm -->
+  <rect x="858" y="315" width="18" height="30"  rx="5"  fill="#0f6e56"/>
+  <!-- right arm (holding item) -->
+  <rect x="922" y="315" width="18" height="30"  rx="5"  fill="#0f6e56"/>
+  <!-- item in right hand -->
+  <rect x="922" y="300" width="18" height="18"  rx="4"  fill="#f0a022"/>
+  <!-- left leg -->
+  <rect x="882" y="348" width="16" height="30"  rx="4"  fill="#1a3a5a"/>
+  <!-- right leg -->
+  <rect x="902" y="348" width="16" height="30"  rx="4"  fill="#1a3a5a"/>
+
+  <!-- Arrow 3 -->
+  <line x1="1007" y1="348" x2="1060" y2="348" stroke="#1bd96a" stroke-width="3" opacity="0.5"/>
+  <polygon points="1060,339 1075,348 1060,357" fill="#1bd96a" opacity="0.5"/>
+
+  <!-- Items in transit -->
+  <rect x="1018" y="330" width="18" height="18" rx="4" fill="#f0a022" opacity="0.85"/>
+  <rect x="1042" y="334" width="14" height="14" rx="3" fill="#f0a022" opacity="0.52"/>
+  <rect x="1062" y="337" width="10" height="10" rx="2" fill="#f0a022" opacity="0.26"/>
+
+  <!-- ═══ STOP 4 — ahead, faded ═══ -->
+  <rect x="1088" y="320" width="78" height="60" rx="10" fill="#185fa5" opacity="0.25"/>
+  <rect x="1088" y="320" width="78" height="24" rx="10" fill="#1e70c0" opacity="0.25"/>
+  <rect x="1112" y="341" width="24" height="15" rx="4" fill="#0c447c" opacity="0.25"/>
+
+  <!-- ═══ PROGRESS STRIP (bottom) ═══ -->
+  <line x1="571" y1="530" x2="1127" y2="530" stroke="#2a2d47" stroke-width="2"/>
+  <line x1="571" y1="530" x2="900"  y2="530" stroke="#1bd96a" stroke-width="2" opacity="0.55"/>
+  <!-- dot 1 -->
+  <circle cx="571"  cy="530" r="9"  fill="#1bd96a"/>
+  <!-- dot 2 -->
+  <circle cx="745"  cy="530" r="9"  fill="#1bd96a"/>
+  <!-- dot 3 current -->
+  <circle cx="900"  cy="530" r="15" fill="#0b1b0b" stroke="#1bd96a" stroke-width="3"/>
+  <circle cx="900"  cy="530" r="7"  fill="#1bd96a"/>
+  <!-- dot 4 ahead -->
+  <circle cx="1127" cy="530" r="9"  fill="#0f111a" stroke="#2a2d47" stroke-width="2.5"/>
+
+  <!-- Progress labels -->
+  <text x="571"  y="558" font-family="'Segoe UI', Arial, sans-serif"
+        font-size="13" fill="#1bd96a" text-anchor="middle" opacity="0.7">Collect</text>
+  <text x="745"  y="558" font-family="'Segoe UI', Arial, sans-serif"
+        font-size="13" fill="#1bd96a" text-anchor="middle" opacity="0.7">Deliver</text>
+  <text x="900"  y="558" font-family="'Segoe UI', Arial, sans-serif"
+        font-size="13" fill="#1bd96a" text-anchor="middle">En route</text>
+  <text x="1127" y="558" font-family="'Segoe UI', Arial, sans-serif"
+        font-size="13" fill="#3a3d5c" text-anchor="middle">Deliver</text>
+
+</svg>
