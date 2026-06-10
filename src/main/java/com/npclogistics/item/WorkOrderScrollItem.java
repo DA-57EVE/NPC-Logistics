@@ -5,6 +5,7 @@ import com.npclogistics.data.WorkOrder.RouteStop;
 import com.npclogistics.data.WorkOrder.StopAction;
 import com.npclogistics.entity.LogisticsWorkerEntity;
 import com.npclogistics.network.ModNetworking;
+import net.fabricmc.fabric.api.transfer.v1.item.ItemStorage;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.client.item.TooltipContext;
 import net.minecraft.entity.LivingEntity;
@@ -176,9 +177,19 @@ public class WorkOrderScrollItem extends Item {
     //  Shared logic for the UseBlockCallback (mod initializer)
     // -----------------------------------------------------------------------
 
-    /** True if the block at {@code pos} is any inventory-capable container. */
+    /**
+     * True if the block at {@code pos} is a container the NPC can interact with.
+     * Checks vanilla {@link Inventory} first (works on both sides), then the Fabric
+     * Transfer API server-side for mod storage blocks that don't implement Inventory.
+     */
     public static boolean isContainer(World world, BlockPos pos) {
-        return world.getBlockEntity(pos) instanceof Inventory;
+        if (world.getBlockEntity(pos) instanceof Inventory) return true;
+        if (!world.isClient) {
+            @SuppressWarnings("UnstableApiUsage")
+            var storage = ItemStorage.SIDED.find(world, pos, null);
+            return storage != null;
+        }
+        return false;
     }
 
     /** Outcome of {@link #addStop}, so the caller can give the right feedback. */

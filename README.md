@@ -302,5 +302,5 @@ used as the flat `layer0` fallback.
 - [ ] Sounds: footstep and work-complete sounds
 - [ ] Crafting recipe for Work Order Scroll and Location Tokens
 - [ ] Visual route overlay (coloured position beams)
-- [ ] Support for double-chests
-- [ ] Support for other mod storage blocks via capability interface
+- [x] Support for double-chests
+- [x] Support for other mod storage blocks via Fabric Transfer API
