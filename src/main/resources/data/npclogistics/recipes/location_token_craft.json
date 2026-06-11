@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "minecraft:gold_ingot"},
+    {"item": "minecraft:blaze_powder"}
+  ],
+  "result": {
+    "item": "npclogistics:location_token_craft",
+    "count": 1
+  }
+}

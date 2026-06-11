@@ -1,6 +1,7 @@
 package com.npclogistics.entity;
 
 import com.npclogistics.NPClogistics;
+import com.npclogistics.ai.CraftingTaskBrain;
 import com.npclogistics.ai.FarmerBrain;
 import com.npclogistics.ai.WorkOrderBrain;
 import com.npclogistics.data.CraftingTask;
@@ -101,6 +102,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     private boolean roleWasActive = false;            // for transition logging only
 
     private final FarmerBrain farmerBrain;
+    private final CraftingTaskBrain craftingTaskBrain;
 
     // Work-order scroll slots — items placed by players via the equipment GUI.
     // Depositor UUID is stamped into the scroll's own NBT ("depositedBy").
@@ -137,8 +139,9 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
 
     public LogisticsWorkerEntity(EntityType<? extends PathAwareEntity> type, World world) {
         super(type, world);
-        workOrderBrain = new WorkOrderBrain(this);
-        farmerBrain    = new FarmerBrain(this);
+        workOrderBrain     = new WorkOrderBrain(this);
+        farmerBrain        = new FarmerBrain(this);
+        craftingTaskBrain  = new CraftingTaskBrain(this);
     }
 
     public static DefaultAttributeContainer.Builder createAttributes() {
@@ -308,17 +311,26 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     }
 
     private void executeTask(int idx) {
-        CraftingTask t = tasks[idx];
-        state          = WorkerState.EXECUTING_TASK;
-        taskTickDelay  = 60; // brief pause before executing (calm, steady workers)
+        state         = WorkerState.EXECUTING_TASK;
+        taskTickDelay = 60; // brief pause before executing (calm, steady workers)
+        craftingTaskBrain.reset();
         NPClogistics.LOGGER.info("{} starting crafting task slot {}.", getName().getString(), idx);
-        // Mark completed if run-once (actual crafting logic is in CraftingTaskBrain — stub for now)
-        if (t.runOnce) tasks[idx] = t.withCompleted(true);
     }
 
     private void tickExecutingTask() {
         if (taskTickDelay > 0) { taskTickDelay--; return; }
-        // TODO: delegate to CraftingTaskBrain when implemented
+        if (currentTaskIndex < 0 || currentTaskIndex >= MAX_TASKS) { advanceTask(); return; }
+        CraftingTask task = tasks[currentTaskIndex];
+        if (task == null) { advanceTask(); return; }
+        craftingTaskBrain.tick((ServerWorld) getWorld(), task);
+    }
+
+    /** Called by {@link CraftingTaskBrain} when the deposit is complete. */
+    public void onCraftingTaskComplete() {
+        if (currentTaskIndex >= 0 && tasks[currentTaskIndex] != null) {
+            CraftingTask t = tasks[currentTaskIndex];
+            if (t.runOnce) tasks[currentTaskIndex] = t.withCompleted(true);
+        }
         advanceTask();
     }
 

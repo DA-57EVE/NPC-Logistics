@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "minecraft:paper"},
+    {"item": "minecraft:paper"},
+    {"item": "minecraft:feather"},
+    {"item": "minecraft:ink_sac"}
+  ],
+  "result": {
+    "item": "npclogistics:work_order_scroll",
+    "count": 1
+  }
+}

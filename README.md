@@ -388,9 +388,9 @@ used as the flat `layer0` fallback.
 - [x] Sounds: chest/barrel open + close sounds on NPC container interaction
 - [x] Any `Inventory` block entity accepted as a route stop (chests, barrels, hoppers, droppers, shulker boxes, etc.)
 - [x] Support for double-chests and other mod storage blocks via Fabric Transfer API
-- [ ] CraftingTaskBrain: full navigation + crafting execution (currently stub)
+- [x] CraftingTaskBrain: full navigation + crafting execution (collect → craft → deposit)
 - [ ] Visual route overlay (coloured position beams)
-- [ ] Crafting recipe for Work Order Scroll and Location Tokens
+- [x] Crafting recipe for Work Order Scroll and Location Tokens
 
 ### Role system
 - [x] Role tab in NPC GUI — three-slot kit (Tool + Jobsite Token + Deposit Token)
