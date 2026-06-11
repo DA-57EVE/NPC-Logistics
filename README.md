@@ -29,7 +29,7 @@ only the Gradle build toolchain needs a JDK 21 present.
 ```bash
 # Gradle must run on a JDK 21 (Loom 1.13 requirement)
 JAVA_HOME=/path/to/jdk-21 ./gradlew build
-# Output: build/libs/npclogistics-1.0.0.jar
+# Output: build/libs/npclogistics-1.1.2.jar
 ```
 
 Run the dev client with `./gradlew runClient`.
@@ -346,6 +346,33 @@ worker.startWorkOrder(order);
 Token models use a 3D coin geometry (`models/item/location_token_base.json`): the
 `_face.png` texture is mapped to the front and back of the disc; the `_icon.png` is
 used as the flat `layer0` fallback.
+
+---
+
+## Changelog
+
+### v1.1.2 (2026-06-11)
+- **Farmer arm swing animation** — NPC now visibly swings the hoe on harvest, plant, and
+  till actions. Root cause: `LivingEntity.tickHandSwing()` is never called by Minecraft for
+  non-player entities; explicitly calling it on the client path makes `BipedEntityModel`
+  render the swing correctly.
+
+### v1.1.1 (2026-06-10)
+- Hoe held persistently in hand while farmer role is active.
+- Batched harvesting — deposits every 6 harvests or when the farm runs dry.
+- Deposit trigger fixed for servers where hoe work always exists.
+- Item-entity pickup navigates to `y+1` so workers reach items resting on farmland.
+- Deposit chest approach from the side (not on top).
+
+### v1.1.0 (2026-06-10)
+- Farmer role: autonomous harvest → replant → deposit loop.
+- Role tab in NPC GUI (Tool + Jobsite Token + Deposit Token kit).
+- Idle farm expansion via hoe-tilling adjacent dirt/grass blocks.
+- Two farmers share a jobsite cooperatively with no extra configuration.
+
+### v1.0.0
+- Initial release: Work Order Scroll routes, NPC Worker GUI, per-stop item filters,
+  drag-to-reorder, BOTH stops, employer system, crafting task stubs.
 
 ---
 
