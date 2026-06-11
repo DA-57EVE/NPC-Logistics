@@ -37,7 +37,7 @@ import java.util.*;
 public class CraftingTaskBrain {
 
     private static final double ARRIVAL_DIST = 3.0;
-    private static final double NAV_SPEED    = 1.0;
+    private static final double NAV_SPEED    = 0.7;
     private static final int    OPEN_HOLD    = 20;   // ticks before items move (lid open)
     private static final int    CRAFT_TICKS  = 40;   // work pause at a crafting table
     private static final int    SMELT_TICKS  = 200;  // simulated smelting time (10 s)
@@ -95,6 +95,11 @@ public class CraftingTaskBrain {
 
         hasIngredients = collectIngredients(world, task);
         closeContainer(world, task.sourcePos);
+        if (!hasIngredients) {
+            // Nothing to collect and nothing on hand — skip the craft block and go home.
+            worker.onCraftingTaskComplete();
+            return;
+        }
         phase = Phase.CRAFTING_NAV;
         timer = 0;
     }
@@ -186,10 +191,9 @@ public class CraftingTaskBrain {
 
         int maxCrafts = Math.min(calculateMaxCraftsFromSource(sourceInv, needed), MAX_CRAFTS);
         if (maxCrafts == 0) {
-            NPClogistics.LOGGER.info("{} source chest has no ingredients for {}; will craft what's on hand",
+            NPClogistics.LOGGER.info("{} source chest has no ingredients for {} — returning home",
                     worker.getName().getString(), task.recipeItem.getItem());
-            // Proceed to the craft block anyway — worker may already carry leftovers.
-            return true;
+            return false;
         }
 
         // Collect maxCrafts × each ingredient slot from the source chest.
