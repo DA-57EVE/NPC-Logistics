@@ -3,12 +3,15 @@ package com.npclogistics.ai;
 import com.npclogistics.NPClogistics;
 import com.npclogistics.data.CraftingTask;
 import com.npclogistics.entity.LogisticsWorkerEntity;
+import net.fabricmc.fabric.api.networking.v1.PlayerLookup;
 import net.minecraft.block.*;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.network.packet.s2c.play.EntityAnimationS2CPacket;
 import net.minecraft.recipe.*;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
@@ -20,13 +23,16 @@ import java.util.*;
 
 /**
  * Executes a single {@link CraftingTask}: collect ingredients → craft → deposit output.
- * Phases run sequentially; the brain calls {@link LogisticsWorkerEntity#onCraftingTaskComplete()}
- * when the deposit is done so the entity can advance to the next task.
+ *
+ * Ingredient collection is batch-sized: the brain calculates how many full recipe cycles
+ * the source chest can supply and collects all of them in one trip.  The craft step loops
+ * until no complete ingredient set remains, so a partial collection still produces as many
+ * items as possible.
  *
  * Crafting is simulated server-side via {@link RecipeManager} — the NPC navigates to the
- * craft block, pauses for a believable duration, then consumes ingredients and produces output
- * directly.  Supported blocks: crafting table (shaped/shapeless), furnace, blast furnace,
- * smoker, stonecutter.
+ * craft block, plays an arm-swing animation and pauses, then consumes ingredients and
+ * produces output directly.  Supported blocks: crafting table (shaped/shapeless),
+ * furnace, blast furnace, smoker, stonecutter.
  */
 public class CraftingTaskBrain {
 
@@ -36,12 +42,14 @@ public class CraftingTaskBrain {
     private static final int    CRAFT_TICKS  = 40;   // work pause at a crafting table
     private static final int    SMELT_TICKS  = 200;  // simulated smelting time (10 s)
     private static final int    CUT_TICKS    = 20;   // stonecutter work pause
+    private static final int    MAX_CRAFTS   = 64;   // upper bound per trip
 
     private enum Phase { IDLE, COLLECTING, CRAFTING_NAV, CRAFTING_WORK, DEPOSITING }
 
     private final LogisticsWorkerEntity worker;
     private Phase   phase          = Phase.IDLE;
     private int     timer          = 0;
+    private int     workDuration   = 0;  // initial timer value for CRAFTING_WORK (used for swing timing)
     private boolean hasIngredients = false;
 
     public CraftingTaskBrain(LogisticsWorkerEntity worker) { this.worker = worker; }
@@ -50,17 +58,18 @@ public class CraftingTaskBrain {
     public void reset() {
         phase          = Phase.IDLE;
         timer          = 0;
+        workDuration   = 0;
         hasIngredients = false;
     }
 
     /** Called every server tick while the worker is in EXECUTING_TASK state. */
     public void tick(ServerWorld world, CraftingTask task) {
         switch (phase) {
-            case IDLE         -> { phase = Phase.COLLECTING; timer = -1; }
-            case COLLECTING   -> tickCollecting(world, task);
-            case CRAFTING_NAV -> tickCraftingNav(world, task);
+            case IDLE          -> { phase = Phase.COLLECTING; timer = -1; }
+            case COLLECTING    -> tickCollecting(world, task);
+            case CRAFTING_NAV  -> tickCraftingNav(world, task);
             case CRAFTING_WORK -> tickCraftingWork(world, task);
-            case DEPOSITING   -> tickDepositing(world, task);
+            case DEPOSITING    -> tickDepositing(world, task);
         }
     }
 
@@ -96,8 +105,9 @@ public class CraftingTaskBrain {
         double dist = worker.getPos().distanceTo(task.craftBlockPos.toCenterPos());
         if (dist <= ARRIVAL_DIST) {
             Block b = world.getBlockState(task.craftBlockPos).getBlock();
-            timer = craftWorkTicks(b);
-            phase = Phase.CRAFTING_WORK;
+            workDuration = craftWorkTicks(b);
+            timer        = workDuration;
+            phase        = Phase.CRAFTING_WORK;
             return;
         }
         if (worker.getNavigation().isIdle()) {
@@ -110,7 +120,17 @@ public class CraftingTaskBrain {
     // ── CRAFTING_WORK ─────────────────────────────────────────────────────────
 
     private void tickCraftingWork(ServerWorld world, CraftingTask task) {
+        // Swing arm when arriving at the block (placing ingredients) and at the midpoint.
+        if (timer == workDuration)          swingMainHand(world);
+        if (timer == workDuration / 2 + 1)  swingMainHand(world);
+
         if (--timer > 0) return;
+
+        // Item-pickup sound signals the craft completing.
+        world.playSound(null, worker.getX(), worker.getY(), worker.getZ(),
+                SoundEvents.ENTITY_ITEM_PICKUP, SoundCategory.PLAYERS,
+                0.6f, 0.9f + worker.getRandom().nextFloat() * 0.4f);
+
         if (hasIngredients) executeCraft(world, task);
         phase = Phase.DEPOSITING;
         timer = -1;
@@ -143,6 +163,12 @@ public class CraftingTaskBrain {
 
     // ── Ingredient collection ─────────────────────────────────────────────────
 
+    /**
+     * Takes one full batch of ingredients from {@code task.sourcePos} — enough for as many
+     * recipe cycles as the source chest can supply (up to {@link #MAX_CRAFTS}).  Returns
+     * {@code true} if at least some ingredients were collected; {@code false} only when the
+     * source is empty or the recipe is unknown (so the craft step can be skipped entirely).
+     */
     private boolean collectIngredients(ServerWorld world, CraftingTask task) {
         Inventory sourceInv = WorkOrderBrain.resolveInventory(world, task.sourcePos);
         if (sourceInv == null) {
@@ -158,29 +184,72 @@ public class CraftingTaskBrain {
             return false;
         }
 
-        boolean allCollected = true;
+        int maxCrafts = Math.min(calculateMaxCraftsFromSource(sourceInv, needed), MAX_CRAFTS);
+        if (maxCrafts == 0) {
+            NPClogistics.LOGGER.info("{} source chest has no ingredients for {}; will craft what's on hand",
+                    worker.getName().getString(), task.recipeItem.getItem());
+            // Proceed to the craft block anyway — worker may already carry leftovers.
+            return true;
+        }
+
+        // Collect maxCrafts × each ingredient slot from the source chest.
         for (Ingredient ing : needed) {
             if (ing.isEmpty()) continue;
-            boolean taken = false;
-            for (int si = 0; si < sourceInv.size(); si++) {
+            int remaining = maxCrafts;
+            for (int si = 0; si < sourceInv.size() && remaining > 0; si++) {
                 ItemStack slot = sourceInv.getStack(si);
                 if (!slot.isEmpty() && ing.test(slot)) {
-                    ItemStack remainder = worker.addToWorkerInventory(slot.copyWithCount(1));
-                    if (remainder.isEmpty()) {
-                        slot.decrement(1);
-                        if (slot.isEmpty()) sourceInv.setStack(si, ItemStack.EMPTY);
-                        taken = true;
-                        break;
-                    }
+                    int take = Math.min(slot.getCount(), remaining);
+                    ItemStack rem = worker.addToWorkerInventory(slot.copyWithCount(take));
+                    int added = take - rem.getCount();
+                    slot.decrement(added);
+                    if (slot.isEmpty()) sourceInv.setStack(si, ItemStack.EMPTY);
+                    remaining -= added;
                 }
             }
-            if (!taken) allCollected = false;
         }
 
         sourceInv.markDirty();
-        NPClogistics.LOGGER.info("{} collected ingredients from {} (success={})",
-                worker.getName().getString(), task.sourcePos, allCollected);
-        return allCollected;
+        NPClogistics.LOGGER.info("{} collected ingredients for up to {} craft(s) of {} from {}",
+                worker.getName().getString(), maxCrafts, task.recipeItem.getItem(), task.sourcePos);
+        return true;
+    }
+
+    /**
+     * Simulates how many complete recipe cycles can be filled from {@code sourceInv}.
+     * Handles recipes where multiple ingredient slots require the same item (e.g. bread = 3 wheat).
+     */
+    private int calculateMaxCraftsFromSource(Inventory sourceInv, List<Ingredient> ingredients) {
+        Map<Item, Integer> available = new HashMap<>();
+        for (int i = 0; i < sourceInv.size(); i++) {
+            ItemStack s = sourceInv.getStack(i);
+            if (!s.isEmpty()) available.merge(s.getItem(), s.getCount(), Integer::sum);
+        }
+
+        int maxCrafts = 0;
+        Map<Item, Integer> reserved = new HashMap<>();
+
+        outer:
+        for (int craft = 0; craft < MAX_CRAFTS; craft++) {
+            Map<Item, Integer> attempt = new HashMap<>(reserved);
+            for (Ingredient ing : ingredients) {
+                if (ing.isEmpty()) continue;
+                boolean found = false;
+                for (Map.Entry<Item, Integer> entry : available.entrySet()) {
+                    Item item = entry.getKey();
+                    int avail = entry.getValue() - attempt.getOrDefault(item, 0);
+                    if (avail > 0 && ing.test(new ItemStack(item))) {
+                        attempt.merge(item, 1, Integer::sum);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) break outer;
+            }
+            reserved = attempt;
+            maxCrafts++;
+        }
+        return maxCrafts;
     }
 
     // ── Recipe execution ──────────────────────────────────────────────────────
@@ -194,6 +263,11 @@ public class CraftingTaskBrain {
         executeCraftingTableRecipe(world, task);
     }
 
+    /**
+     * Loops crafting table recipes until the worker's inventory can no longer supply a full
+     * ingredient set.  Each iteration consumes one recipe's worth of ingredients and produces
+     * one output stack, naturally handling recipes that yield more than 1 item per craft.
+     */
     private void executeCraftingTableRecipe(ServerWorld world, CraftingTask task) {
         Item target = task.recipeItem.getItem();
         Optional<CraftingRecipe> recipeOpt = world.getRecipeManager()
@@ -210,57 +284,63 @@ public class CraftingTaskBrain {
         CraftingRecipe recipe = recipeOpt.get();
         DefaultedList<Ingredient> ingredients = recipe.getIngredients();
         SimpleInventory workerInv = worker.getWorkerInventory();
+        int totalCrafted = 0;
 
-        // Match each non-empty ingredient slot to a worker inventory slot.
-        // Track available count per slot so multiple ingredients can draw from the same stack
-        // (e.g. bread needs 3 wheat, which may all be in one slot with count=3).
-        int[] ingToWorkerSlot = new int[ingredients.size()];
-        Arrays.fill(ingToWorkerSlot, -1);
-        int[] available = new int[workerInv.size()];
-        for (int wi = 0; wi < workerInv.size(); wi++) available[wi] = workerInv.getStack(wi).getCount();
+        while (true) {
+            // Match each non-empty ingredient slot to a worker inventory slot, tracking
+            // remaining count so multiple slots can share the same stack.
+            int[] ingToWorkerSlot = new int[ingredients.size()];
+            Arrays.fill(ingToWorkerSlot, -1);
+            int[] avail = new int[workerInv.size()];
+            for (int wi = 0; wi < workerInv.size(); wi++) avail[wi] = workerInv.getStack(wi).getCount();
 
-        boolean allFound = true;
-        for (int ingIdx = 0; ingIdx < ingredients.size(); ingIdx++) {
-            Ingredient ing = ingredients.get(ingIdx);
-            if (ing.isEmpty()) continue;
-            boolean found = false;
-            for (int wi = 0; wi < workerInv.size(); wi++) {
-                if (available[wi] <= 0) continue;
-                if (ing.test(workerInv.getStack(wi))) {
-                    ingToWorkerSlot[ingIdx] = wi;
-                    available[wi]--;
-                    found = true;
-                    break;
+            boolean allFound = true;
+            for (int ingIdx = 0; ingIdx < ingredients.size(); ingIdx++) {
+                Ingredient ing = ingredients.get(ingIdx);
+                if (ing.isEmpty()) continue;
+                boolean found = false;
+                for (int wi = 0; wi < workerInv.size(); wi++) {
+                    if (avail[wi] <= 0) continue;
+                    if (ing.test(workerInv.getStack(wi))) {
+                        ingToWorkerSlot[ingIdx] = wi;
+                        avail[wi]--;
+                        found = true;
+                        break;
+                    }
                 }
+                if (!found) { allFound = false; break; }
             }
-            if (!found) { allFound = false; break; }
+            if (!allFound) break;
+
+            // Consume ingredients (multiple slots may map to the same worker slot).
+            int[] toConsume = new int[workerInv.size()];
+            for (int ingIdx = 0; ingIdx < ingredients.size(); ingIdx++) {
+                int wi = ingToWorkerSlot[ingIdx];
+                if (wi >= 0) toConsume[wi]++;
+            }
+            for (int wi = 0; wi < workerInv.size(); wi++) {
+                if (toConsume[wi] <= 0) continue;
+                ItemStack s = workerInv.getStack(wi);
+                s.decrement(toConsume[wi]);
+                if (s.isEmpty()) workerInv.setStack(wi, ItemStack.EMPTY);
+            }
+
+            // Produce output; stop if worker inventory is full.
+            ItemStack output = recipe.getOutput(world.getRegistryManager()).copy();
+            ItemStack rem = worker.addToWorkerInventory(output);
+            totalCrafted++;
+            if (!rem.isEmpty()) break; // inventory full
         }
 
-        if (!allFound) {
-            NPClogistics.LOGGER.warn("{} missing ingredient(s) at craft time",
+        ItemStack outputRef = recipe.getOutput(world.getRegistryManager());
+        if (totalCrafted > 0) {
+            NPClogistics.LOGGER.info("{} crafted {}×{} {}",
+                    worker.getName().getString(), totalCrafted,
+                    outputRef.getCount(), outputRef.getItem());
+        } else {
+            NPClogistics.LOGGER.warn("{} no ingredients for craft at workstation",
                     worker.getName().getString());
-            return;
         }
-
-        // Count how many to consume from each worker slot (multiple ingredients may share a slot).
-        int[] toConsume = new int[workerInv.size()];
-        for (int ingIdx = 0; ingIdx < ingredients.size(); ingIdx++) {
-            int wi = ingToWorkerSlot[ingIdx];
-            if (wi >= 0) toConsume[wi]++;
-        }
-
-        // Consume ingredients.
-        for (int wi = 0; wi < workerInv.size(); wi++) {
-            if (toConsume[wi] <= 0) continue;
-            ItemStack s = workerInv.getStack(wi);
-            s.decrement(toConsume[wi]);
-            if (s.isEmpty()) workerInv.setStack(wi, ItemStack.EMPTY);
-        }
-
-        // Add crafted output.
-        ItemStack output = recipe.getOutput(world.getRegistryManager()).copy();
-        worker.addToWorkerInventory(output);
-        NPClogistics.LOGGER.info("{} crafted {}", worker.getName().getString(), output);
     }
 
     private void executeCookingRecipe(ServerWorld world, CraftingTask task,
@@ -278,7 +358,7 @@ public class CraftingTaskBrain {
                     worker.getName().getString(), target, type);
             return;
         }
-        executeSingleInputRecipe(world, task, recipe);
+        executeSingleInputRecipe(world, recipe);
     }
 
     private void executeStoneCutRecipe(ServerWorld world, CraftingTask task) {
@@ -293,28 +373,37 @@ public class CraftingTaskBrain {
                     worker.getName().getString(), target);
             return;
         }
-        executeSingleInputRecipe(world, task, recipe);
+        executeSingleInputRecipe(world, recipe);
     }
 
-    /** Consume one matching ingredient from the worker inventory and produce one output stack. */
-    private void executeSingleInputRecipe(ServerWorld world, CraftingTask task, Recipe<?> recipe) {
+    /** Consumes one input per cycle, producing one output, until input is exhausted or inventory full. */
+    private void executeSingleInputRecipe(ServerWorld world, Recipe<?> recipe) {
         DefaultedList<Ingredient> ingredients = recipe.getIngredients();
         if (ingredients.isEmpty()) return;
         Ingredient ing = ingredients.get(0);
         SimpleInventory workerInv = worker.getWorkerInventory();
+        int totalCrafted = 0;
+
+        outer:
         for (int wi = 0; wi < workerInv.size(); wi++) {
             ItemStack s = workerInv.getStack(wi);
-            if (!s.isEmpty() && ing.test(s)) {
+            while (!s.isEmpty() && ing.test(s)) {
                 s.decrement(1);
                 if (s.isEmpty()) workerInv.setStack(wi, ItemStack.EMPTY);
-                ItemStack output = recipe.getOutput(world.getRegistryManager()).copy();
-                worker.addToWorkerInventory(output);
-                NPClogistics.LOGGER.info("{} produced {}", worker.getName().getString(), output);
-                return;
+                ItemStack rem = worker.addToWorkerInventory(recipe.getOutput(world.getRegistryManager()).copy());
+                totalCrafted++;
+                if (!rem.isEmpty()) break outer;
             }
         }
-        NPClogistics.LOGGER.warn("{} could not find input ingredient for single-input recipe",
-                worker.getName().getString());
+
+        if (totalCrafted > 0) {
+            NPClogistics.LOGGER.info("{} produced {}×{}",
+                    worker.getName().getString(), totalCrafted,
+                    recipe.getOutput(world.getRegistryManager()).getItem());
+        } else {
+            NPClogistics.LOGGER.warn("{} no input ingredient for single-input recipe",
+                    worker.getName().getString());
+        }
     }
 
     // ── Deposit ───────────────────────────────────────────────────────────────
@@ -356,11 +445,6 @@ public class CraftingTaskBrain {
 
     // ── Recipe lookup ─────────────────────────────────────────────────────────
 
-    /**
-     * Returns the non-empty ingredients for the recipe that produces {@code task.recipeItem},
-     * selecting the recipe type appropriate for the craft block.  Returns {@code null} if no
-     * matching recipe exists.
-     */
     private List<Ingredient> findRequiredIngredients(ServerWorld world, CraftingTask task) {
         Block b = world.getBlockState(task.craftBlockPos).getBlock();
         Item target = task.recipeItem.getItem();
@@ -388,12 +472,21 @@ public class CraftingTaskBrain {
                     .orElse(null);
         }
 
-        // Default: crafting table
         return world.getRecipeManager().listAllOfType(RecipeType.CRAFTING).stream()
                 .filter(r -> r.getOutput(world.getRegistryManager()).getItem() == target)
                 .findFirst()
                 .map(r -> new ArrayList<>(r.getIngredients()))
                 .orElse(null);
+    }
+
+    // ── Animation ─────────────────────────────────────────────────────────────
+
+    private void swingMainHand(ServerWorld world) {
+        EntityAnimationS2CPacket packet = new EntityAnimationS2CPacket(
+                worker, EntityAnimationS2CPacket.SWING_MAIN_HAND);
+        for (ServerPlayerEntity p : PlayerLookup.tracking(worker)) {
+            p.networkHandler.sendPacket(packet);
+        }
     }
 
     // ── Container sounds ──────────────────────────────────────────────────────
