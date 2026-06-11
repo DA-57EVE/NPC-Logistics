@@ -420,8 +420,8 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
 
     private void drawCargoBg(DrawContext ctx, int mx, int my) {
         // Background panel for the 18-slot cargo hold (2 rows × 9 slots)
-        ctx.fill(x + 7, y + 16, x + 193, y + 96, C_WO_BG);
-        border(ctx, x + 7, y + 16, x + 193, y + 96);
+        ctx.fill(x + 7, y + 16, x + 193, y + SEP1_Y, C_WO_BG);
+        border(ctx, x + 7, y + 16, x + 193, y + SEP1_Y);
         for (int i = 0; i < EquipmentScreenHandler.NPC_INV_SLOTS; i++) {
             int col = i % 9;
             int row = i / 9;
@@ -522,7 +522,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     }
 
     private void drawCargoFg(DrawContext ctx) {
-        ctx.drawText(textRenderer, "Worker Cargo Hold", 10, 19, C_ACCENT, false);
+        ctx.drawText(textRenderer, "Cargo Hold", 10, 19, C_ACCENT, false);
         ctx.drawText(textRenderer, "Items collected by this worker.", 10, 80, C_MUTED, false);
         ctx.drawText(textRenderer, "Click or shift-click to retrieve.", 10, 90, C_MUTED, false);
     }
