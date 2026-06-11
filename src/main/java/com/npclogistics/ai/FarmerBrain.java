@@ -12,6 +12,7 @@ import net.minecraft.item.Items;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.network.packet.s2c.play.EntityAnimationS2CPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -287,7 +288,15 @@ public class FarmerBrain {
 
     // ── Crop actions ─────────────────────────────────────────────────────────
 
+    private void swingMainHand(ServerWorld world) {
+        EntityAnimationS2CPacket packet = new EntityAnimationS2CPacket(worker, EntityAnimationS2CPacket.SWING_MAIN_HAND);
+        for (net.minecraft.server.network.ServerPlayerEntity p : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(worker)) {
+            p.networkHandler.sendPacket(packet);
+        }
+    }
+
     private void harvestCrop(ServerWorld world, BlockPos pos, Block cropBlock) {
+        swingMainHand(world);
         world.setBlockState(pos, Blocks.AIR.getDefaultState());
         world.playSound(null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
                 SoundEvents.BLOCK_GRASS_BREAK, SoundCategory.BLOCKS, 1.0f, 1.0f);
@@ -308,6 +317,7 @@ public class FarmerBrain {
     private void plantCrop(ServerWorld world, BlockPos pos, Block cropBlock) {
         Item seed = getSeedForCrop(cropBlock);
         if (seed == null || !hasItem(seed)) return;
+        swingMainHand(world);
         consumeItem(seed);
         world.setBlockState(pos, cropBlock.getDefaultState());
         world.playSound(null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
@@ -318,7 +328,7 @@ public class FarmerBrain {
     private void hoeBlock(ServerWorld world, BlockPos pos) {
         Block current = world.getBlockState(pos).getBlock();
         if (current != Blocks.DIRT && current != Blocks.GRASS_BLOCK) return;
-        worker.swingHand(Hand.MAIN_HAND);
+        swingMainHand(world);
         world.setBlockState(pos, Blocks.FARMLAND.getDefaultState());
         world.playSound(null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
                 SoundEvents.BLOCK_GRASS_BREAK, SoundCategory.BLOCKS, 1.0f, 1.0f);

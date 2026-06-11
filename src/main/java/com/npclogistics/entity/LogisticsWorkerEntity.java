@@ -361,7 +361,12 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     @Override
     public void tick() {
         super.tick();
-        if (getWorld().isClient) return;
+        if (getWorld().isClient) {
+            // LivingEntity.tickHandSwing() is only called by PlayerEntity in vanilla;
+            // call it here so EntityAnimationS2CPacket-driven arm swings animate correctly.
+            tickHandSwing();
+            return;
+        }
 
         if (interactionCooldown > 0) interactionCooldown--;
 
