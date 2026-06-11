@@ -351,6 +351,23 @@ used as the flat `layer0` fallback.
 
 ## Changelog
 
+### v1.2.0 (2026-06-11)
+- **CraftingTaskBrain — batch ingredient collection:** calculates the maximum number of
+  recipe cycles the source chest can supply and collects a full batch in one trip (up to 64
+  cycles), rather than exactly one cycle's worth.
+- **CraftingTaskBrain — loop crafting:** after collecting, the worker loops at the craft
+  block until no complete ingredient set remains, producing all possible output in one stop.
+  Furnace and stonecutter recipes loop similarly.
+- **CraftingTaskBrain — arm swing + sound:** NPC swings its arm at the craft block on
+  arrival and at the midpoint of the work pause; item-pickup sound plays when the craft
+  fires.
+- **Empty source handling:** when the source chest has no ingredients the worker skips
+  directly home without visiting the craft block. `runOnce` tasks are not marked complete
+  on an empty source — they remain eligible for the next activation.
+- **Navigation speed:** craft-block nav and return-home both run at 0.8 (was 1.0).
+- **Survival crafting recipes:** Work Order Scroll, and all four Location Token variants
+  now have JSON recipes craftable in survival.
+
 ### v1.1.2 (2026-06-11)
 - **Farmer arm swing animation** — NPC now visibly swings the hoe on harvest, plant, and
   till actions. Root cause: `LivingEntity.tickHandSwing()` is never called by Minecraft for
