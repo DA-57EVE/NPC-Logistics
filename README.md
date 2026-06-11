@@ -351,6 +351,19 @@ used as the flat `layer0` fallback.
 
 ## Changelog
 
+### v1.3.0 (2026-06-11)
+- **Work Goggles:** new helmet-slot item (2× glass pane + iron ingot + gold ingot) that renders
+  route overlays for nearby NPC workers — coloured lines between stops (green=collect, red=deliver,
+  gold=both), wireframe boxes at each stop, and colour-coded billboard labels (sign text or
+  coordinates). Active stop and leg pulse. Lines render through walls.
+- **Goggle overlay — crafting tasks:** while a worker is executing a crafting task the overlay
+  shows the source → craft block → deposit triangle in real time.
+- **Goggle overlay — idle workers:** configured routes are visible even when the worker is idle
+  between auto-fire cycles (reads from scroll slots).
+- **30% task interleave on repeating routes:** when a repeating work order completes and the
+  worker returns home, there is a 30% chance the task list runs before the route restarts —
+  giving workers a natural "side-job" cadence without manual scheduling.
+
 ### v1.2.0 (2026-06-11)
 - **CraftingTaskBrain — batch ingredient collection:** calculates the maximum number of
   recipe cycles the source chest can supply and collects a full batch in one trip (up to 64
