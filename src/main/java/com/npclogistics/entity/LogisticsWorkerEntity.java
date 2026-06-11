@@ -433,13 +433,19 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     }
 
     private void syncRouteToGoggles(ServerWorld world) {
+        // Prefer the active order; fall back to the configured scroll so idle
+        // workers still show their route through the goggles.
         WorkOrder wo = activeWorkOrder;
+        if (wo == null) wo = WorkOrderScrollItem.readOrder(woScroll1);
+        if (wo == null) wo = WorkOrderScrollItem.readOrder(woScroll2);
         if (wo == null || wo.getStops().isEmpty()) return;
+
         java.util.List<WorkOrder.RouteStop> stops = wo.getStops();
+        int stopIdx = (activeWorkOrder != null) ? currentStopIndex : -1;
         for (net.minecraft.server.network.ServerPlayerEntity p : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(this)) {
             if (p.getEquippedStack(net.minecraft.entity.EquipmentSlot.HEAD).getItem()
                     instanceof com.npclogistics.item.WorkGogglesItem) {
-                com.npclogistics.network.ModNetworking.sendRouteData(p, this, stops, currentStopIndex);
+                com.npclogistics.network.ModNetworking.sendRouteData(p, this, stops, stopIdx);
             }
         }
     }

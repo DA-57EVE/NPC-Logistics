@@ -184,7 +184,7 @@ public class RouteOverlayRenderer {
                         : stop.label();
 
                 double wx = stop.pos().getX() + 0.5 - camPos.x;
-                double wy = stop.pos().getY() + 2.2  - camPos.y;
+                double wy = stop.pos().getY() + 2.8  - camPos.y;
                 double wz = stop.pos().getZ() + 0.5 - camPos.z;
 
                 matrices.push();
@@ -193,7 +193,7 @@ public class RouteOverlayRenderer {
                 matrices.scale(-0.025f, -0.025f, 0.025f);
 
                 float tx = -textRenderer.getWidth(label) / 2.0f;
-                textRenderer.draw(label, tx, 0, 0xFFFFFF, false,
+                textRenderer.draw(label, tx, 0, actionColorInt(stop.actionOrdinal()), false,
                         matrices.peek().getPositionMatrix(),
                         textVcp,
                         TextRenderer.TextLayerType.SEE_THROUGH,
@@ -246,5 +246,10 @@ public class RouteOverlayRenderer {
             case 2  -> new float[]{ 1.0f, 0.75f, 0.1f }; // BOTH — gold
             default -> new float[]{ 0.2f, 0.85f, 0.3f }; // COLLECT — green
         };
+    }
+
+    private static int actionColorInt(int ordinal) {
+        float[] c = actionColor(ordinal);
+        return 0xFF000000 | ((int)(c[0] * 255) << 16) | ((int)(c[1] * 255) << 8) | (int)(c[2] * 255);
     }
 }
