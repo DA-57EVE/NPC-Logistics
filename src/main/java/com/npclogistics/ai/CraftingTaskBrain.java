@@ -54,6 +54,16 @@ public class CraftingTaskBrain {
 
     public CraftingTaskBrain(LogisticsWorkerEntity worker) { this.worker = worker; }
 
+    /** Maps the current phase to a stop index for the goggle overlay (0=source, 1=craft, 2=deposit, -1=idle). */
+    public int getCurrentPhaseIndex() {
+        return switch (phase) {
+            case COLLECTING                    -> 0;
+            case CRAFTING_NAV, CRAFTING_WORK   -> 1;
+            case DEPOSITING                    -> 2;
+            default                            -> -1;
+        };
+    }
+
     /** Reset all state when a new task is assigned. */
     public void reset() {
         phase          = Phase.IDLE;

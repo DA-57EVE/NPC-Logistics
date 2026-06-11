@@ -280,6 +280,33 @@ public class ModNetworking {
         ServerPlayNetworking.send(player, ROUTE_DATA_SYNC, buf);
     }
 
+    /**
+     * Pushes crafting-task route data (source → craft block → deposit) to a goggle-wearing player.
+     * Reuses the same ROUTE_DATA_SYNC packet with synthetic stops so the client renders identically.
+     */
+    public static void sendTaskRouteData(ServerPlayerEntity player, LogisticsWorkerEntity worker,
+                                          com.npclogistics.data.CraftingTask task, int phaseIndex) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeInt(worker.getId());
+        buf.writeString(worker.getCustomName() != null
+                ? worker.getCustomName().getString() : worker.getName().getString(), 48);
+        buf.writeInt(phaseIndex);
+        buf.writeInt(3);
+        // Source chest — green (COLLECT ordinal 0)
+        buf.writeBlockPos(task.sourcePos);
+        buf.writeByte(0);
+        buf.writeString(readSignLabel(worker.getWorld(), task.sourcePos), 64);
+        // Craft block — gold (BOTH ordinal 2, used to signal "processing")
+        buf.writeBlockPos(task.craftBlockPos);
+        buf.writeByte(2);
+        buf.writeString(readSignLabel(worker.getWorld(), task.craftBlockPos), 64);
+        // Deposit chest — red (DELIVER ordinal 1)
+        buf.writeBlockPos(task.depositPos);
+        buf.writeByte(1);
+        buf.writeString(readSignLabel(worker.getWorld(), task.depositPos), 64);
+        ServerPlayNetworking.send(player, ROUTE_DATA_SYNC, buf);
+    }
+
     /** Reads the first non-empty line of a sign adjacent to {@code pos}, or empty string. */
     private static String readSignLabel(net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos) {
         for (net.minecraft.util.math.Direction dir : net.minecraft.util.math.Direction.values()) {

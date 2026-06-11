@@ -425,16 +425,44 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
             getNavigation().stop();
             state = WorkerState.IDLE;
 
-            // If repeating, restart
+            // If repeating: 30% chance to run the task list first, then restart the route.
             if (activeWorkOrder != null && activeWorkOrder.isRepeating()) {
-                startWorkOrder(activeWorkOrder);
+                if (getRandom().nextFloat() < 0.30f) {
+                    startTaskChain();
+                    // If no tasks were found, restart the route immediately.
+                    if (state != WorkerState.EXECUTING_TASK) startWorkOrder(activeWorkOrder);
+                    // Otherwise tasks run; tickReturning fires again after they complete and
+                    // activeWorkOrder is still set, so the route restarts then.
+                } else {
+                    startWorkOrder(activeWorkOrder);
+                }
             }
         }
     }
 
     private void syncRouteToGoggles(ServerWorld world) {
-        // Prefer the active order; fall back to the configured scroll so idle
-        // workers still show their route through the goggles.
+        java.util.List<net.minecraft.server.network.ServerPlayerEntity> gogglePlayers = new java.util.ArrayList<>();
+        for (net.minecraft.server.network.ServerPlayerEntity p : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(this)) {
+            if (p.getEquippedStack(net.minecraft.entity.EquipmentSlot.HEAD).getItem()
+                    instanceof com.npclogistics.item.WorkGogglesItem) {
+                gogglePlayers.add(p);
+            }
+        }
+        if (gogglePlayers.isEmpty()) return;
+
+        // Crafting task in progress — show source → craft block → deposit triangle.
+        if (state == WorkerState.EXECUTING_TASK && currentTaskIndex >= 0) {
+            com.npclogistics.data.CraftingTask task = tasks[currentTaskIndex];
+            if (task != null && task.hasAllContent()) {
+                int phaseIdx = craftingTaskBrain.getCurrentPhaseIndex();
+                for (net.minecraft.server.network.ServerPlayerEntity p : gogglePlayers) {
+                    com.npclogistics.network.ModNetworking.sendTaskRouteData(p, this, task, phaseIdx);
+                }
+                return;
+            }
+        }
+
+        // Work order route — prefer active order, fall back to scroll slot so idle workers show too.
         WorkOrder wo = activeWorkOrder;
         if (wo == null) wo = WorkOrderScrollItem.readOrder(woScroll1);
         if (wo == null) wo = WorkOrderScrollItem.readOrder(woScroll2);
@@ -442,11 +470,8 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
 
         java.util.List<WorkOrder.RouteStop> stops = wo.getStops();
         int stopIdx = (activeWorkOrder != null) ? currentStopIndex : -1;
-        for (net.minecraft.server.network.ServerPlayerEntity p : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(this)) {
-            if (p.getEquippedStack(net.minecraft.entity.EquipmentSlot.HEAD).getItem()
-                    instanceof com.npclogistics.item.WorkGogglesItem) {
-                com.npclogistics.network.ModNetworking.sendRouteData(p, this, stops, stopIdx);
-            }
+        for (net.minecraft.server.network.ServerPlayerEntity p : gogglePlayers) {
+            com.npclogistics.network.ModNetworking.sendRouteData(p, this, stops, stopIdx);
         }
     }
 
