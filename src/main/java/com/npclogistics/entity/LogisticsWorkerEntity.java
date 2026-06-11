@@ -425,8 +425,8 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
             getNavigation().stop();
             state = WorkerState.IDLE;
 
-            // If repeating: 30% chance to run the task list first, then restart the route.
             if (activeWorkOrder != null && activeWorkOrder.isRepeating()) {
+                // Repeating route: 30% chance to run the task list first, then restart.
                 if (getRandom().nextFloat() < 0.30f) {
                     startTaskChain();
                     // If no tasks were found, restart the route immediately.
@@ -436,6 +436,12 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
                 } else {
                     startWorkOrder(activeWorkOrder);
                 }
+            } else {
+                // Non-repeating route or task chain complete: clear stale reference and
+                // immediately check for more work (another scroll, more tasks) rather than
+                // waiting up to 9 min for the next auto-fire window.
+                activeWorkOrder = null;
+                activateWorkOrders();
             }
         }
     }
