@@ -351,6 +351,11 @@ used as the flat `layer0` fallback.
 
 ## Changelog
 
+### v1.3.1 (2026-06-11)
+- **Immediate work resumption:** when a worker arrives home after completing a non-repeating route
+  or a task chain, it now calls `activateWorkOrders()` straight away instead of waiting for the
+  next scheduled auto-fire window (up to ~9 min).
+
 ### v1.3.0 (2026-06-11)
 - **Work Goggles:** new helmet-slot item (2× glass pane + iron ingot + gold ingot) that renders
   route overlays for nearby NPC workers — coloured lines between stops (green=collect, red=deliver,
