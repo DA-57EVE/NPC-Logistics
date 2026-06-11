@@ -214,7 +214,7 @@ public class EquipmentScreenHandler extends ScreenHandler {
         for (int i = 0; i < NPC_INV_SLOTS; i++) {
             int col = i % 9;
             int row = i / 9;
-            addSlot(new CargoSlot(cargoInventory, i, 8 + col * 18, 28 + row * 18));
+            addSlot(new CargoSlot(cargoInventory, i, 8 + col * 18, 34 + row * 18));
         }
     }
 

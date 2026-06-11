@@ -425,7 +425,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         for (int i = 0; i < EquipmentScreenHandler.NPC_INV_SLOTS; i++) {
             int col = i % 9;
             int row = i / 9;
-            slotBg(ctx, x + 8 + col * 18, y + 28 + row * 18); // matches CargoSlot positions
+            slotBg(ctx, x + 8 + col * 18, y + 34 + row * 18); // matches CargoSlot positions
         }
         ctx.fill(x + 7, y + SEP1_Y,     x + 193, y + SEP1_Y + 1, C_BORDER);
         ctx.fill(x + 7, y + SEP1_Y + 1, x + 193, y + SEP2_Y,     C_PANEL);
@@ -522,9 +522,9 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     }
 
     private void drawCargoFg(DrawContext ctx) {
-        ctx.drawText(textRenderer, "Cargo Hold", 10, 19, C_ACCENT, false);
-        ctx.drawText(textRenderer, "Items collected by this worker.", 10, 80, C_MUTED, false);
-        ctx.drawText(textRenderer, "Click or shift-click to retrieve.", 10, 90, C_MUTED, false);
+        ctx.drawText(textRenderer, "Cargo Hold", 10, 23, C_ACCENT, false);
+        ctx.drawText(textRenderer, "Items collected by this worker.", 10, 74, C_MUTED, false);
+        ctx.drawText(textRenderer, "Click or shift-click to retrieve.", 10, 84, C_MUTED, false);
     }
 
     private void drawTasksFg(DrawContext ctx) {
