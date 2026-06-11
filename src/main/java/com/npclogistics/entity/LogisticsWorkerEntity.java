@@ -128,6 +128,9 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     private int         pausedStopIndex = 0;
     private int         pausedTaskIndex = -1;
 
+    // ── Goggle route sync ─────────────────────────────────────────────────────
+    private int goggleSyncTimer = 0;
+
     // ── Auto-fire scheduling (3× per game day) ────────────────────────────────
     // Fires at morning (1000), midday (6000) and evening (13000) ticks.
     private long lastCheckedDay    = -1;
@@ -404,6 +407,12 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
             case EXECUTING_TASK  -> tickExecutingTask();
             case IDLE            -> checkAutoFire((ServerWorld) getWorld());
         }
+
+        // Push route data to any nearby goggle-wearing players every 20 ticks.
+        if (++goggleSyncTimer >= 20) {
+            goggleSyncTimer = 0;
+            syncRouteToGoggles((ServerWorld) getWorld());
+        }
     }
 
     private void tickReturning() {
@@ -419,6 +428,18 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
             // If repeating, restart
             if (activeWorkOrder != null && activeWorkOrder.isRepeating()) {
                 startWorkOrder(activeWorkOrder);
+            }
+        }
+    }
+
+    private void syncRouteToGoggles(ServerWorld world) {
+        WorkOrder wo = activeWorkOrder;
+        if (wo == null || wo.getStops().isEmpty()) return;
+        java.util.List<WorkOrder.RouteStop> stops = wo.getStops();
+        for (net.minecraft.server.network.ServerPlayerEntity p : net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(this)) {
+            if (p.getEquippedStack(net.minecraft.entity.EquipmentSlot.HEAD).getItem()
+                    instanceof com.npclogistics.item.WorkGogglesItem) {
+                com.npclogistics.network.ModNetworking.sendRouteData(p, this, stops, currentStopIndex);
             }
         }
     }

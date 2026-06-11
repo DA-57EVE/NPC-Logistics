@@ -51,6 +51,8 @@ public class ModNetworking {
     public static final Identifier TASK_TOGGLE_ONCE       = new Identifier(NPClogistics.MOD_ID, "task_toggle_once");
     /** C2S: clear all slots + metadata for one task row (delete). */
     public static final Identifier TASK_DELETE            = new Identifier(NPClogistics.MOD_ID, "task_delete");
+    /** S2C: pushes route stop data to a goggle-wearing player for overlay rendering. */
+    public static final Identifier ROUTE_DATA_SYNC        = new Identifier(NPClogistics.MOD_ID, "route_data_sync");
 
     // -----------------------------------------------------------------------
     //  Server-side packet handlers
@@ -254,5 +256,41 @@ public class ModNetworking {
         buf.writeInt(currentStopIndex);
         buf.writeString(workerState);
         ServerPlayNetworking.send(player, WORK_ORDER_SYNC, buf);
+    }
+
+    /**
+     * Pushes route overlay data for one worker to a goggle-wearing player.
+     * Called server-side every second for each eligible (worker, player) pair.
+     *
+     * Payload per stop: BlockPos + action ordinal (byte) + sign label (String ≤64).
+     */
+    public static void sendRouteData(ServerPlayerEntity player, LogisticsWorkerEntity worker,
+                                      java.util.List<WorkOrder.RouteStop> stops, int currentStopIndex) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeInt(worker.getId());
+        buf.writeString(worker.getCustomName() != null
+                ? worker.getCustomName().getString() : worker.getName().getString(), 48);
+        buf.writeInt(currentStopIndex);
+        buf.writeInt(stops.size());
+        for (WorkOrder.RouteStop stop : stops) {
+            buf.writeBlockPos(stop.pos);
+            buf.writeByte(stop.action.ordinal());
+            buf.writeString(readSignLabel(worker.getWorld(), stop.pos), 64);
+        }
+        ServerPlayNetworking.send(player, ROUTE_DATA_SYNC, buf);
+    }
+
+    /** Reads the first non-empty line of a sign adjacent to {@code pos}, or empty string. */
+    private static String readSignLabel(net.minecraft.world.World world, net.minecraft.util.math.BlockPos pos) {
+        for (net.minecraft.util.math.Direction dir : net.minecraft.util.math.Direction.values()) {
+            net.minecraft.block.entity.BlockEntity be = world.getBlockEntity(pos.offset(dir));
+            if (be instanceof net.minecraft.block.entity.SignBlockEntity sign) {
+                for (int row = 0; row < 4; row++) {
+                    String text = sign.getFrontText().getMessage(row, false).getString().trim();
+                    if (!text.isEmpty()) return text;
+                }
+            }
+        }
+        return "";
     }
 }

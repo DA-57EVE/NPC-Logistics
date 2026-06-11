@@ -45,6 +45,13 @@ public class ModItems {
             new LocationTokenItem(new FabricItemSettings().maxCount(1), LocationTokenItem.TokenType.JOBSITE)
     );
 
+    /** Helmet-slot utility item — when worn, renders nearby workers' route overlays. */
+    public static final WorkGogglesItem WORK_GOGGLES = Registry.register(
+            Registries.ITEM,
+            new Identifier(NPClogistics.MOD_ID, "work_goggles"),
+            new WorkGogglesItem(new FabricItemSettings().maxCount(1))
+    );
+
     public static void register() {
         NPClogistics.LOGGER.info("Registering mod items...");
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
@@ -53,6 +60,7 @@ public class ModItems {
             entries.add(LOCATION_TOKEN_CRAFT);
             entries.add(LOCATION_TOKEN_DEPOSIT);
             entries.add(LOCATION_TOKEN_JOBSITE);
+            entries.add(WORK_GOGGLES);
         });
     }
 }

@@ -5,6 +5,7 @@
   "item.npclogistics.location_token_craft": "Craft Token",
   "item.npclogistics.location_token_deposit": "Deposit Token",
   "item.npclogistics.location_token_jobsite": "Jobsite Token",
+  "item.npclogistics.work_goggles": "Work Goggles",
   "screen.npclogistics.work_order": "Work Order Editor",
   "npclogistics.command.workorder": "Work Order Commands"
 }

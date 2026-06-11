@@ -1,5 +1,6 @@
 package com.npclogistics.client.network;
 
+import com.npclogistics.client.renderer.RouteOverlayRenderer;
 import com.npclogistics.data.WorkOrder;
 import com.npclogistics.network.ModNetworking;
 import com.npclogistics.screen.WorkOrderScreen;
@@ -9,6 +10,10 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.util.Hand;
+import net.minecraft.util.math.BlockPos;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Environment(EnvType.CLIENT)
 public class ClientNetworking {
@@ -44,6 +49,24 @@ public class ClientNetworking {
             String state = buf.readString();
             // Could be used to update an open WorkOrderScreen if it references this worker
             // For now, just log – extend as needed
+        });
+
+        // ROUTE_DATA_SYNC – route overlay data for goggle wearers
+        ClientPlayNetworking.registerGlobalReceiver(ModNetworking.ROUTE_DATA_SYNC, (client, handler, buf, sender) -> {
+            int entityId = buf.readInt();
+            String workerName = buf.readString(48);
+            int currentStopIndex = buf.readInt();
+            int stopCount = buf.readInt();
+            List<RouteOverlayRenderer.StopRenderData> stops = new ArrayList<>(stopCount);
+            for (int i = 0; i < stopCount; i++) {
+                BlockPos pos = buf.readBlockPos();
+                int actionOrdinal = buf.readByte() & 0xFF;
+                String label = buf.readString(64);
+                stops.add(new RouteOverlayRenderer.StopRenderData(pos, actionOrdinal, label));
+            }
+            RouteOverlayRenderer.RouteRenderData data =
+                    new RouteOverlayRenderer.RouteRenderData(workerName, currentStopIndex, stops, System.currentTimeMillis());
+            client.execute(() -> RouteOverlayRenderer.updateRoute(entityId, data));
         });
     }
 

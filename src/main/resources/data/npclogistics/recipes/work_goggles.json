@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "minecraft:glass_pane" },
+    { "item": "minecraft:glass_pane" },
+    { "item": "minecraft:iron_ingot" },
+    { "item": "minecraft:gold_ingot" }
+  ],
+  "result": {
+    "item": "npclogistics:work_goggles",
+    "count": 1
+  }
+}
