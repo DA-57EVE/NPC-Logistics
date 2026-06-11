@@ -411,7 +411,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
 
         double dist = getPos().distanceTo(homePos.toCenterPos());
         if (dist > 1.5) {
-            getNavigation().startMovingTo(homePos.getX() + 0.5, homePos.getY(), homePos.getZ() + 0.5, 1.0);
+            getNavigation().startMovingTo(homePos.getX() + 0.5, homePos.getY(), homePos.getZ() + 0.5, 0.8);
         } else {
             getNavigation().stop();
             state = WorkerState.IDLE;
