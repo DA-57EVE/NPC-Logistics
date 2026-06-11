@@ -351,6 +351,11 @@ used as the flat `layer0` fallback.
 
 ## Changelog
 
+### v1.3.2 (2026-06-11)
+- **Cargo tab polish:** box extended to fill the panel area (text no longer overflows the bottom),
+  heading renamed to "Cargo Hold", slot grid indented to match the inventory section, and hint
+  text repositioned closer to the slot grid.
+
 ### v1.3.1 (2026-06-11)
 - **Immediate work resumption:** when a worker arrives home after completing a non-repeating route
   or a task chain, it now calls `activateWorkOrders()` straight away instead of waiting for the
