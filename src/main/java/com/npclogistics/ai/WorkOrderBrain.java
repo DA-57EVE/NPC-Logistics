@@ -32,7 +32,7 @@ import java.util.Map;
 
 public class WorkOrderBrain {
 
-    private static final double ARRIVAL_DISTANCE    = 3.0;
+    private static final double ARRIVAL_DISTANCE    = 1.5;
     private static final int INTERACTION_COOLDOWN   = 10;
     /** Ticks the lid stays open before items move. */
     private static final int OPEN_HOLD_TICKS        = 20;
@@ -42,9 +42,10 @@ public class WorkOrderBrain {
     private enum Phase { IDLE, OPENING, CLOSING }
 
     private final LogisticsWorkerEntity worker;
-    private Phase phase         = Phase.IDLE;
-    private int phaseTimer      = 0;
-    private boolean strictArrival = true; // false when no adjacent approach pos was found
+    private Phase    phase          = Phase.IDLE;
+    private int      phaseTimer     = 0;
+    private boolean  strictArrival  = true;   // false when no adjacent approach pos was found
+    private BlockPos currentApproach = null;  // approach pos for the current stop; null until nav starts
 
     public WorkOrderBrain(LogisticsWorkerEntity worker) {
         this.worker = worker;
@@ -103,46 +104,71 @@ public class WorkOrderBrain {
     // -----------------------------------------------------------------------
 
     private void navigateToStop(ServerWorld world, RouteStop stop) {
-        if (!isAtStop(stop) && worker.getNavigation().isIdle()) {
-            BlockPos approach = findApproachPos(world, stop.pos);
-            if (approach.equals(stop.pos)) {
-                // No clear adjacent position found (chest in a corner, etc.); fall back to
-                // the old behaviour — NPC may end up on top but will still interact.
+        if (isAtStop(stop)) {
+            worker.getNavigation().stop();
+            return;
+        }
+        if (worker.getNavigation().isIdle()) {
+            currentApproach = findApproachPos(world, stop.pos, worker.getBlockPos());
+            if (currentApproach.equals(stop.pos)) {
                 strictArrival = false;
                 worker.getNavigation().startMovingTo(
-                        stop.pos.getX() + 0.5, stop.pos.getY(), stop.pos.getZ() + 0.5, 1.0);
+                        stop.pos.getX() + 0.5, stop.pos.getY(), stop.pos.getZ() + 0.5, 0.8);
             } else {
                 strictArrival = true;
                 worker.getNavigation().startMovingTo(
-                        approach.getX() + 0.5, approach.getY(), approach.getZ() + 0.5, 1.0);
+                        currentApproach.getX() + 0.5, currentApproach.getY(), currentApproach.getZ() + 0.5, 0.8);
             }
         }
     }
 
     /**
-     * Returns a walkable position adjacent to {@code containerPos} so the NPC stands
-     * beside the container rather than on top of it. Checks the four cardinal neighbors;
-     * the first one with two clear blocks above a solid floor is chosen. Falls back to
-     * the container's own position if none is found (e.g. chest surrounded on all sides).
+     * Returns a walkable position beside {@code containerPos}, preferring the side closest
+     * to {@code npcPos} so the pathfinder doesn't route over the container to reach the
+     * opposite side. Pass 1: immediate neighbours; pass 2: two blocks out. Falls back to
+     * the container's own position only when no clear adjacent position exists.
      */
-    private static BlockPos findApproachPos(ServerWorld world, BlockPos containerPos) {
-        for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+    private static BlockPos findApproachPos(ServerWorld world, BlockPos containerPos, BlockPos npcPos) {
+        Direction[] hDirs = npcSidedDirections(containerPos, npcPos);
+        for (Direction dir : hDirs) {
             BlockPos candidate = containerPos.offset(dir);
-            BlockPos below = candidate.down();
-            if (world.getBlockState(candidate).isAir()
-                    && world.getBlockState(candidate.up()).isAir()
-                    && !world.getBlockState(below).isAir()) {
-                return candidate;
-            }
+            if (isClearStanding(world, candidate)) return candidate;
+        }
+        for (Direction dir : hDirs) {
+            BlockPos candidate = containerPos.offset(dir, 2);
+            if (isClearStanding(world, candidate)) return candidate;
         }
         return containerPos;
     }
 
+    /** Returns the four cardinal directions sorted so the one nearest the NPC comes first. */
+    private static Direction[] npcSidedDirections(BlockPos container, BlockPos npc) {
+        int dx = npc.getX() - container.getX();
+        int dz = npc.getZ() - container.getZ();
+        Direction primary = Math.abs(dx) >= Math.abs(dz)
+                ? (dx >= 0 ? Direction.EAST : Direction.WEST)
+                : (dz >= 0 ? Direction.SOUTH : Direction.NORTH);
+        Direction[] all = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+        Direction[] sorted = new Direction[4];
+        sorted[0] = primary;
+        int i = 1;
+        for (Direction d : all) if (d != primary) sorted[i++] = d;
+        return sorted;
+    }
+
+    private static boolean isClearStanding(ServerWorld world, BlockPos pos) {
+        return world.getBlockState(pos).isAir()
+                && world.getBlockState(pos.up()).isAir()
+                && !world.getBlockState(pos.down()).isAir();
+    }
+
     private boolean isAtStop(RouteStop stop) {
-        if (worker.getPos().distanceTo(stop.pos.toCenterPos()) > ARRIVAL_DISTANCE) return false;
-        // Reject arrival if the NPC is on top of the container and a proper adjacent approach
-        // position was found. Skipped when no adjacent position exists (strictArrival = false).
-        if (strictArrival && worker.getBlockPos().getY() > stop.pos.getY()) return false;
+        // Check distance to the approach position (not the chest center) so the NPC walks
+        // all the way to the adjacent cell rather than stopping as soon as the chest
+        // enters the 3-block arrival radius.
+        BlockPos ref = (currentApproach != null) ? currentApproach : stop.pos;
+        if (worker.getPos().distanceTo(ref.toCenterPos()) > ARRIVAL_DISTANCE) return false;
+        if (strictArrival && worker.getY() > stop.pos.getY() + 0.2) return false;
         return true;
     }
 
@@ -323,6 +349,7 @@ public class WorkOrderBrain {
     // -----------------------------------------------------------------------
 
     private void advanceToNextStop(WorkOrder order) {
+        currentApproach = null;
         int next = worker.getCurrentStopIndex() + 1;
         if (next >= order.getStops().size()) {
             worker.onRouteComplete();

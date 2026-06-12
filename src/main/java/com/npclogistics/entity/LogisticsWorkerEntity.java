@@ -3,6 +3,7 @@ package com.npclogistics.entity;
 import com.npclogistics.NPClogistics;
 import com.npclogistics.ai.CraftingTaskBrain;
 import com.npclogistics.ai.FarmerBrain;
+import com.npclogistics.ai.ShepherdBrain;
 import com.npclogistics.ai.WorkOrderBrain;
 import com.npclogistics.data.CraftingTask;
 import com.npclogistics.data.NpcRole;
@@ -102,6 +103,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     private boolean roleWasActive = false;            // for transition logging only
 
     private final FarmerBrain farmerBrain;
+    private final ShepherdBrain shepherdBrain;
     private final CraftingTaskBrain craftingTaskBrain;
 
     // Work-order scroll slots — items placed by players via the equipment GUI.
@@ -144,7 +146,9 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         super(type, world);
         workOrderBrain     = new WorkOrderBrain(this);
         farmerBrain        = new FarmerBrain(this);
+        shepherdBrain      = new ShepherdBrain(this);
         craftingTaskBrain  = new CraftingTaskBrain(this);
+        ((net.minecraft.entity.ai.pathing.MobNavigation) getNavigation()).setCanPathThroughDoors(true);
     }
 
     public static DefaultAttributeContainer.Builder createAttributes() {
@@ -365,6 +369,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     @Override
     protected void initGoals() {
         // Low-priority vanilla goals that activate only when IDLE
+        goalSelector.add(1, new LongDoorInteractGoal(this, true));
         goalSelector.add(8, new LookAtEntityGoal(this, PlayerEntity.class, 8.0f));
         goalSelector.add(9, new LookAroundGoal(this));
     }
@@ -393,13 +398,17 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
                         getName().getString(), activeRole(), getJobsitePos(), getDepositPos());
                 roleWasActive = true;
             }
-            farmerBrain.tick((ServerWorld) getWorld());
+            switch (activeRole()) {
+                case FARMER   -> { setStepHeight(0.6f); farmerBrain.tick((ServerWorld) getWorld()); }
+                case SHEPHERD -> { setStepHeight(0.6f); shepherdBrain.tick((ServerWorld) getWorld()); }
+            }
             return;
         }
         if (roleWasActive) {
             NPClogistics.LOGGER.info("{} role deactivated.", getName().getString());
             roleWasActive = false;
         }
+        setStepHeight(0.6f);
 
         switch (state) {
             case EXECUTING       -> workOrderBrain.tick((ServerWorld) getWorld());
@@ -420,7 +429,9 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
 
         double dist = getPos().distanceTo(homePos.toCenterPos());
         if (dist > 1.5) {
-            getNavigation().startMovingTo(homePos.getX() + 0.5, homePos.getY(), homePos.getZ() + 0.5, 0.8);
+            if (getNavigation().isIdle()) {
+                getNavigation().startMovingTo(homePos.getX() + 0.5, homePos.getY(), homePos.getZ() + 0.5, 0.8);
+            }
         } else {
             getNavigation().stop();
             state = WorkerState.IDLE;

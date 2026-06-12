@@ -36,7 +36,7 @@ import java.util.*;
  */
 public class CraftingTaskBrain {
 
-    private static final double ARRIVAL_DIST = 3.0;
+    private static final double ARRIVAL_DIST = 2.5;
     private static final double NAV_SPEED    = 0.8;
     private static final int    OPEN_HOLD    = 20;   // ticks before items move (lid open)
     private static final int    CRAFT_TICKS  = 40;   // work pause at a crafting table
@@ -47,10 +47,10 @@ public class CraftingTaskBrain {
     private enum Phase { IDLE, COLLECTING, CRAFTING_NAV, CRAFTING_WORK, DEPOSITING }
 
     private final LogisticsWorkerEntity worker;
-    private Phase   phase          = Phase.IDLE;
-    private int     timer          = 0;
-    private int     workDuration   = 0;  // initial timer value for CRAFTING_WORK (used for swing timing)
-    private boolean hasIngredients = false;
+    private Phase    phase          = Phase.IDLE;
+    private int      timer          = 0;
+    private int      workDuration   = 0;
+    private boolean  hasIngredients = false;
 
     public CraftingTaskBrain(LogisticsWorkerEntity worker) { this.worker = worker; }
 
@@ -89,7 +89,7 @@ public class CraftingTaskBrain {
         double dist = worker.getPos().distanceTo(task.sourcePos.toCenterPos());
         if (dist > ARRIVAL_DIST) {
             if (worker.getNavigation().isIdle()) {
-                BlockPos approach = findApproachPos(world, task.sourcePos);
+                BlockPos approach = findApproachPos(world, task.sourcePos, worker.getBlockPos());
                 worker.getNavigation().startMovingTo(
                         approach.getX() + 0.5, approach.getY(), approach.getZ() + 0.5, NAV_SPEED);
             }
@@ -106,7 +106,6 @@ public class CraftingTaskBrain {
         hasIngredients = collectIngredients(world, task);
         closeContainer(world, task.sourcePos);
         if (!hasIngredients) {
-            // Source empty — advance without marking runOnce tasks complete (nothing was produced).
             worker.advanceTask();
             return;
         }
@@ -126,7 +125,7 @@ public class CraftingTaskBrain {
             return;
         }
         if (worker.getNavigation().isIdle()) {
-            BlockPos approach = findApproachPos(world, task.craftBlockPos);
+            BlockPos approach = findApproachPos(world, task.craftBlockPos, worker.getBlockPos());
             worker.getNavigation().startMovingTo(
                     approach.getX() + 0.5, approach.getY(), approach.getZ() + 0.5, NAV_SPEED);
         }
@@ -157,7 +156,7 @@ public class CraftingTaskBrain {
         double dist = worker.getPos().distanceTo(task.depositPos.toCenterPos());
         if (dist > ARRIVAL_DIST) {
             if (worker.getNavigation().isIdle()) {
-                BlockPos approach = findApproachPos(world, task.depositPos);
+                BlockPos approach = findApproachPos(world, task.depositPos, worker.getBlockPos());
                 worker.getNavigation().startMovingTo(
                         approach.getX() + 0.5, approach.getY(), approach.getZ() + 0.5, NAV_SPEED);
             }
@@ -523,20 +522,35 @@ public class CraftingTaskBrain {
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    private static BlockPos findApproachPos(ServerWorld world, BlockPos targetPos) {
-        for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+    private static BlockPos findApproachPos(ServerWorld world, BlockPos targetPos, BlockPos npcPos) {
+        Direction[] hDirs = npcSidedDirections(targetPos, npcPos);
+        for (Direction dir : hDirs) {
             BlockPos candidate = targetPos.offset(dir);
             if (isStandable(world, candidate)) return candidate;
         }
-        for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+        for (Direction dir : hDirs) {
             BlockPos candidate = targetPos.offset(dir).up();
             if (isStandable(world, candidate)) return candidate;
         }
-        for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+        for (Direction dir : hDirs) {
             BlockPos candidate = targetPos.offset(dir, 2);
             if (isStandable(world, candidate)) return candidate;
         }
         return targetPos;
+    }
+
+    private static Direction[] npcSidedDirections(BlockPos target, BlockPos npc) {
+        int dx = npc.getX() - target.getX();
+        int dz = npc.getZ() - target.getZ();
+        Direction primary = Math.abs(dx) >= Math.abs(dz)
+                ? (dx >= 0 ? Direction.EAST : Direction.WEST)
+                : (dz >= 0 ? Direction.SOUTH : Direction.NORTH);
+        Direction[] all    = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+        Direction[] sorted = new Direction[4];
+        sorted[0] = primary;
+        int i = 1;
+        for (Direction d : all) if (d != primary) sorted[i++] = d;
+        return sorted;
     }
 
     private static boolean isStandable(ServerWorld world, BlockPos pos) {

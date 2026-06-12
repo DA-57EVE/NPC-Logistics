@@ -25,25 +25,22 @@ import java.util.List;
 public class FarmerBrain {
 
     private static final int    SCAN_RADIUS   = 24;
-    private static final int    HOE_RADIUS    = 10; // cap farm expansion to a sensible size
+    private static final int    HOE_RADIUS    = 10;
     private static final double ARRIVAL_DIST  = 2.5;
     private static final int    WORK_TICKS    = 20;
     private static final int    DEPOSIT_TICKS = 40;
-    private static final int    SCAN_INTERVAL = 60;
-    private static final double NAV_SPEED     = 0.6; // realistic walking pace
+    private static final int    WAIT_INTERVAL = 200; // ticks between scans while waiting at deposit chest
+    private static final double NAV_SPEED     = 0.8;
 
-    private enum FarmerPhase { SCANNING, NAVIGATING, WORKING, DEPOSITING }
+    private enum FarmerPhase { SCANNING, NAVIGATING, WORKING, DEPOSITING, WAITING }
     private enum WorkType    { HARVEST, PLANT, PICKUP, HOE }
 
     private record WorkTarget(BlockPos pos, WorkType type, Block cropBlock) {}
 
-    private static final int HARVESTS_PER_DEPOSIT = 6; // batch this many harvests before a deposit run
-
     private final LogisticsWorkerEntity worker;
-    private FarmerPhase phase              = FarmerPhase.SCANNING;
-    private WorkTarget  target             = null;
-    private int         timer              = 0;
-    private int         harvestsSinceDeposit = 0;
+    private FarmerPhase phase  = FarmerPhase.SCANNING;
+    private WorkTarget  target = null;
+    private int         timer  = 0;
 
     public FarmerBrain(LogisticsWorkerEntity worker) { this.worker = worker; }
 
@@ -68,6 +65,7 @@ public class FarmerBrain {
             case NAVIGATING -> tickNavigating(world);
             case WORKING    -> tickWorking(world);
             case DEPOSITING -> tickDepositing(world, deposit);
+            case WAITING    -> tickWaiting(world, jobsite, deposit);
         }
     }
 
@@ -76,12 +74,7 @@ public class FarmerBrain {
     private void tickScanning(ServerWorld world, BlockPos center) {
         if (--timer > 0) return;
 
-        // Deposit after a batch of harvests, or when the farm is exhausted
-        if (isInventoryFull() || harvestsSinceDeposit >= HARVESTS_PER_DEPOSIT) {
-            harvestsSinceDeposit = 0;
-            beginDeposit();
-            return;
-        }
+        if (isInventoryFull()) { beginDeposit(); return; }
 
         WorkTarget found = findNearestWork(world, center);
         if (found != null) {
@@ -90,8 +83,8 @@ public class FarmerBrain {
             worker.getNavigation().stop();
             NPClogistics.LOGGER.info("{} farmer targeting {} at {}", worker.getName().getString(), found.type(), found.pos());
         } else {
-            if (hasItemsToDeposit()) { harvestsSinceDeposit = 0; beginDeposit(); return; }
-            timer = SCAN_INTERVAL;
+            if (hasItemsToDeposit()) { beginDeposit(); return; }
+            beginWaiting();
         }
     }
 
@@ -133,7 +126,7 @@ public class FarmerBrain {
                         target.pos().getZ() + 0.5,
                         NAV_SPEED);
             } else {
-                BlockPos approach = findApproachPos(world, target.pos());
+                BlockPos approach = findApproachPos(world, target.pos(), worker.getBlockPos());
                 worker.getNavigation().startMovingTo(
                         approach.getX() + 0.5, approach.getY(), approach.getZ() + 0.5, NAV_SPEED);
             }
@@ -168,7 +161,7 @@ public class FarmerBrain {
         double dist = worker.getPos().distanceTo(depositPos.toCenterPos());
         if (dist > ARRIVAL_DIST) {
             if (worker.getNavigation().isIdle()) {
-                BlockPos approach = findApproachPos(world, depositPos);
+                BlockPos approach = findApproachPos(world, depositPos, worker.getBlockPos());
                 worker.getNavigation().startMovingTo(
                         approach.getX() + 0.5, approach.getY(), approach.getZ() + 0.5, NAV_SPEED);
             }
@@ -193,9 +186,57 @@ public class FarmerBrain {
                     block == Blocks.BARREL ? SoundEvents.BLOCK_BARREL_CLOSE : SoundEvents.BLOCK_CHEST_CLOSE,
                     SoundCategory.BLOCKS, 0.4f, 1.0f);
             world.addSyncedBlockEvent(depositPos, block, 1, 0);
-            phase = FarmerPhase.SCANNING;
-            timer = 10;
+            beginWaiting();
         }
+    }
+
+    private void beginWaiting() {
+        phase  = FarmerPhase.WAITING;
+        target = null;
+        timer  = 0;
+        worker.getNavigation().stop();
+    }
+
+    private void tickWaiting(ServerWorld world, BlockPos center, BlockPos depositPos) {
+        if (worker.getNavigation().isIdle()) {
+            double dist = worker.getPos().distanceTo(depositPos.toCenterPos());
+            if (dist > ARRIVAL_DIST) {
+                BlockPos approach = findApproachPos(world, depositPos, worker.getBlockPos());
+                worker.getNavigation().startMovingTo(
+                        approach.getX() + 0.5, approach.getY(), approach.getZ() + 0.5, NAV_SPEED);
+            }
+        }
+
+        if (--timer > 0) return;
+        timer = WAIT_INTERVAL;
+
+        WorkTarget found = findNearestWork(world, center);
+        if (found != null) {
+            target = found;
+            phase  = FarmerPhase.NAVIGATING;
+            worker.getNavigation().stop();
+            return;
+        }
+        NPClogistics.LOGGER.info("{} waiting: {}", worker.getName().getString(), describeWaiting(world, center));
+    }
+
+    private String describeWaiting(ServerWorld world, BlockPos center) {
+        for (int dx = -SCAN_RADIUS; dx <= SCAN_RADIUS; dx++) {
+            for (int dz = -SCAN_RADIUS; dz <= SCAN_RADIUS; dz++) {
+                for (int dy = -3; dy <= 3; dy++) {
+                    BlockState state = world.getBlockState(center.add(dx, dy, dz));
+                    if (state.getBlock() instanceof CropBlock && !isMatureCrop(state)) {
+                        Block b = state.getBlock();
+                        if (b == Blocks.WHEAT)     return "wheat to mature";
+                        if (b == Blocks.CARROTS)   return "carrots to mature";
+                        if (b == Blocks.POTATOES)  return "potatoes to mature";
+                        if (b == Blocks.BEETROOTS) return "beetroot to mature";
+                        return "crops to mature";
+                    }
+                }
+            }
+        }
+        return "no crops found";
     }
 
     // ── Scan ─────────────────────────────────────────────────────────────────
@@ -310,7 +351,6 @@ public class FarmerBrain {
             consumeItem(seed);
             world.setBlockState(pos, cropBlock.getDefaultState());
         }
-        harvestsSinceDeposit++;
         NPClogistics.LOGGER.info("{} harvested {} at {}", worker.getName().getString(), cropBlock, pos);
     }
 
@@ -426,24 +466,39 @@ public class FarmerBrain {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static BlockPos findApproachPos(ServerWorld world, BlockPos targetPos) {
+    private static BlockPos findApproachPos(ServerWorld world, BlockPos targetPos, BlockPos npcPos) {
+        Direction[] hDirs = npcSidedDirections(targetPos, npcPos);
         // Pass 1: open air at the same level as the target (normal case)
-        for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+        for (Direction dir : hDirs) {
             BlockPos candidate = targetPos.offset(dir);
             if (isStandable(world, candidate)) return candidate;
         }
         // Pass 2: standing on top of a solid block adjacent to the target
         // (handles chests surrounded by farmland — NPC stands on the farmland beside it)
-        for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+        for (Direction dir : hDirs) {
             BlockPos candidate = targetPos.offset(dir).up();
             if (isStandable(world, candidate)) return candidate;
         }
         // Pass 3: two blocks out if tightly enclosed
-        for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+        for (Direction dir : hDirs) {
             BlockPos candidate = targetPos.offset(dir, 2);
             if (isStandable(world, candidate)) return candidate;
         }
         return targetPos;
+    }
+
+    private static Direction[] npcSidedDirections(BlockPos target, BlockPos npc) {
+        int dx = npc.getX() - target.getX();
+        int dz = npc.getZ() - target.getZ();
+        Direction primary = Math.abs(dx) >= Math.abs(dz)
+                ? (dx >= 0 ? Direction.EAST : Direction.WEST)
+                : (dz >= 0 ? Direction.SOUTH : Direction.NORTH);
+        Direction[] all = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+        Direction[] sorted = new Direction[4];
+        sorted[0] = primary;
+        int i = 1;
+        for (Direction d : all) if (d != primary) sorted[i++] = d;
+        return sorted;
     }
 
     private static boolean isStandable(ServerWorld world, BlockPos pos) {
