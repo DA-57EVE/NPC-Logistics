@@ -53,6 +53,8 @@ public class ModNetworking {
     public static final Identifier TASK_DELETE            = new Identifier(NPClogistics.MOD_ID, "task_delete");
     /** S2C: pushes route stop data to a goggle-wearing player for overlay rendering. */
     public static final Identifier ROUTE_DATA_SYNC        = new Identifier(NPClogistics.MOD_ID, "route_data_sync");
+    /** C2S: toggle the ignoreDark flag on a worker (work through the night). */
+    public static final Identifier TOGGLE_IGNORE_DARK     = new Identifier(NPClogistics.MOD_ID, "toggle_ignore_dark");
 
     // -----------------------------------------------------------------------
     //  Server-side packet handlers
@@ -140,6 +142,7 @@ public class ModNetworking {
                         b.writeBoolean(canPlayerTakeScroll(p, worker.getWoScroll2()));
                         b.writeBoolean(worker.isEmployer(p.getUuid()));
                         b.writeString(worker.getEmployerName());
+                        b.writeBoolean(worker.isIgnoreDark());
                         for (int i = 0; i < com.npclogistics.entity.LogisticsWorkerEntity.MAX_TASKS; i++) {
                             com.npclogistics.data.CraftingTask t = worker.getTask(i);
                             b.writeBoolean(t != null && t.runOnce);
@@ -197,6 +200,22 @@ public class ModNetworking {
                 // Update the open handler so close() saves correctly.
                 if (player.currentScreenHandler instanceof com.npclogistics.screen.EquipmentScreenHandler eh)
                     eh.setTaskRunOnce(taskIndex, runOnce);
+            });
+        });
+
+        // TOGGLE_IGNORE_DARK
+        // Payload: workerEntityId (int), value (boolean)
+        ServerPlayNetworking.registerGlobalReceiver(TOGGLE_IGNORE_DARK, (server, player, handler, buf, responseSender) -> {
+            int entityId = buf.readInt();
+            boolean value = buf.readBoolean();
+            server.execute(() -> {
+                if (!(player.getWorld().getEntityById(entityId) instanceof LogisticsWorkerEntity worker)) return;
+                if (worker.squaredDistanceTo(player) > 64) return;
+                worker.setIgnoreDark(value);
+                if (player.currentScreenHandler instanceof com.npclogistics.screen.EquipmentScreenHandler eh)
+                    eh.setIgnoreDark(value);
+                NPClogistics.LOGGER.info("{} set ignoreDark={} on worker {}",
+                        player.getName().getString(), value, worker.getId());
             });
         });
 

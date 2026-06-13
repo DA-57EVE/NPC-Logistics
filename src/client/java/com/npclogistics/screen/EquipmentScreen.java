@@ -81,6 +81,11 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     // Task area box bottom — tight fit around 6 rows
     private static final int   TASK_AREA_BOTTOM = TROW_Y + MAX_T * TROW_H + 2; // 128
 
+    // Bed slot Y on the equip tab (left column, below feet armour)
+    private static final int BED_SLOT_Y = 98;
+    // Moon-blue tint for the bed slot border
+    private static final int C_BED = 0xFF4466AA;
+
     // ── Widgets ───────────────────────────────────────────────────────────────
     private TextFieldWidget nameField;
     private TextFieldWidget skinUrlField;
@@ -90,6 +95,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     private ButtonWidget tabCargo;
     private ButtonWidget tabTasks;
     private ButtonWidget tabRole;
+    private ButtonWidget ignoreDarkBtn;
 
     // Per-task-row toggle and delete buttons (built in init)
     private final ButtonWidget[] toggleButtons = new ButtonWidget[MAX_T];
@@ -98,6 +104,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     // Client-side mirror of runOnce/completed (optimistic updates)
     private final boolean[] runOnce    = new boolean[MAX_T];
     private final boolean[] completed  = new boolean[MAX_T];
+    private boolean ignoreDark;
 
     public EquipmentScreen(EquipmentScreenHandler handler, PlayerInventory inv, Text title) {
         super(handler, inv, title);
@@ -108,6 +115,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
             runOnce[i]   = handler.taskRunOnce[i];
             completed[i] = handler.taskCompleted[i];
         }
+        ignoreDark = handler.ignoreDark;
     }
 
     @Override
@@ -194,6 +202,18 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
                     .dimensions(x + DELETE_X, y + ry, 14, 14).build());
         }
 
+        // ignoreDark toggle (Role tab)
+        ignoreDarkBtn = addDrawableChild(ButtonWidget.builder(
+                Text.empty(),
+                btn -> {
+                    ignoreDark = !ignoreDark;
+                    ClientNetworking.sendToggleIgnoreDark(handler.workerEntityId, ignoreDark);
+                })
+                .dimensions(x + 8, y + 97, 177, 14)
+                .tooltip(Tooltip.of(
+                        Text.literal("When ON, this NPC ignores night-time and keeps working")))
+                .build());
+
         switchTab(activeTab);
     }
 
@@ -208,6 +228,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         skinUrlField.visible = equip;
         applyButton.visible  = equip;
         applyButton.active   = equip && handler.isEmployer;
+        ignoreDarkBtn.visible = role;
 
         for (int i = 0; i < MAX_T; i++) {
             toggleButtons[i].visible = tasks;
@@ -228,16 +249,25 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         }
     }
 
-    /** Enable/disable equipment slots. armorHand = slots 0-5; wo = slots 6-7. */
+    /**
+     * Enable/disable equipment slots.
+     *   armorHand = armor (0-3) + hands (4-5) + bed token (8) — equip tab only.
+     *   wo        = WO scroll slots (6-7) — equip and orders tabs.
+     */
     private void setEquipmentActive(boolean armorHand, boolean wo) {
+        // Armor + hand slots (0-5)
         for (int i = 0; i < EquipmentScreenHandler.SLOT_WO1; i++) {
             if (handler.slots.get(i) instanceof EquipmentScreenHandler.DisablableSlot ds)
                 ds.setActive(armorHand);
         }
-        for (int i = EquipmentScreenHandler.SLOT_WO1; i < EquipmentScreenHandler.EQUIPMENT_SLOTS; i++) {
+        // WO scroll slots (6-7)
+        for (int i = EquipmentScreenHandler.SLOT_WO1; i < EquipmentScreenHandler.SLOT_BED; i++) {
             if (handler.slots.get(i) instanceof EquipmentScreenHandler.DisablableSlot ds)
                 ds.setActive(wo);
         }
+        // Bed token slot (8) — equip tab only
+        if (handler.slots.get(EquipmentScreenHandler.SLOT_BED) instanceof EquipmentScreenHandler.DisablableSlot ds)
+            ds.setActive(armorHand);
     }
 
     private void setRoleActive(boolean active) {
@@ -286,6 +316,20 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
                     context.drawItemTooltip(textRenderer, slot.getStack(), mouseX, mouseY);
                     return;
                 }
+                // Bed token slot hint (Equip tab)
+                if (activeTab == TAB_EQUIPMENT) {
+                    int idx = handler.slots.indexOf(slot);
+                    if (idx == EquipmentScreenHandler.SLOT_BED) {
+                        context.drawTooltip(textRenderer, List.of(
+                                Text.literal("Bed Token").formatted(Formatting.BLUE),
+                                Text.literal("NPC sleeps here when it gets dark").formatted(Formatting.DARK_GRAY),
+                                Text.literal("Right-click a bed while holding a Bed Token").formatted(Formatting.DARK_GRAY)
+                        ), mouseX, mouseY);
+                        return;
+                    }
+                    continue;
+                }
+
                 // Role-slot hints
                 if (activeTab == TAB_ROLE) {
                     int idx = handler.slots.indexOf(slot);
@@ -395,6 +439,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
 
     private void drawEquipBg(DrawContext ctx, int mx, int my) {
         for (int ay : ARMOR_Y) slotBg(ctx, x + 8, y + ay);
+        slotBgTinted(ctx, x + 8, y + BED_SLOT_Y, C_BED); // bed token slot
         slotBg(ctx, x + 152, y + 38);
         slotBg(ctx, x + 152, y + 58);
         slotBg(ctx, x + 152, y + 78);
@@ -467,6 +512,8 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         slotBg(ctx, x + 8, y + EquipmentScreenHandler.ROLE_TOOL_Y);
         slotBgTinted(ctx, x + 8, y + EquipmentScreenHandler.ROLE_JOBSITE_Y, 0xFF446688);
         slotBgTinted(ctx, x + 8, y + EquipmentScreenHandler.ROLE_DEPOSIT_Y, 0xFF226633);
+        // Night divider
+        ctx.fill(x + 8, y + 77, x + 192, y + 78, C_DIVIDER);
         ctx.fill(x + 7, y + SEP1_Y,     x + 193, y + SEP1_Y + 1, C_BORDER);
         ctx.fill(x + 7, y + SEP1_Y + 1, x + 193, y + SEP2_Y,     C_PANEL);
     }
@@ -488,6 +535,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
     private void drawEquipFg(DrawContext ctx) {
         for (int i = 0; i < ARMOR_LBL.length; i++)
             ctx.drawText(textRenderer, ARMOR_LBL[i], 28, ARMOR_Y[i] + 5, C_MUTED, false);
+        ctx.drawText(textRenderer, "Bed", 28, BED_SLOT_Y + 5, C_BED, false);
         drawRight(ctx, "Main",    150, 43,  C_MUTED);
         drawRight(ctx, "Off",     150, 63,  C_MUTED);
         drawRight(ctx, "Order 1", 148, 83,  C_MUTED);
@@ -606,19 +654,36 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
             statusText  = "Needs a hoe in the Tool slot";
             statusColor = C_MUTED;
         } else if (jobsiteStack.isEmpty()) {
-            statusText  = "Needs a Jobsite Token (stamped)";
+            statusText  = "Needs a stamped Jobsite Token";
             statusColor = C_MUTED;
         } else if (!hasJobsite) {
-            statusText  = "Jobsite Token not stamped — right-click a block";
+            statusText  = "Jobsite: right-click a block to stamp";
             statusColor = C_ROLE_INACTIVE;
         } else if (depositStack.isEmpty()) {
-            statusText  = "Needs a Deposit Token (stamped)";
+            statusText  = "Needs a stamped Deposit Token";
             statusColor = C_MUTED;
         } else {
-            statusText  = "Deposit Token not stamped — right-click a block";
+            statusText  = "Deposit: right-click a block to stamp";
             statusColor = C_ROLE_INACTIVE;
         }
-        ctx.drawText(textRenderer, statusText, 10, 108, statusColor, false);
+
+        // Role kit status — scaled down to fit below deposit slot, above night divider
+        ctx.getMatrices().push();
+        ctx.getMatrices().translate(10, 79, 0);
+        ctx.getMatrices().scale(0.85f, 0.85f, 1.0f);
+        ctx.drawText(textRenderer, statusText, 0, 0, statusColor, false);
+        ctx.getMatrices().pop();
+
+        // Night behavior section
+        ctx.drawText(textRenderer, "Night behavior:", 10, 91, C_BED, false);
+
+        // ignoreDark button overlay — draws on top of the invisible ButtonWidget
+        int btnBg = ignoreDark
+                ? (ignoreDarkBtn.isHovered() ? 0xFF5577BB : 0xFF335599)
+                : (ignoreDarkBtn.isHovered() ? 0xFF444455 : 0xFF252530);
+        ctx.fill(8, 97, 8 + 177, 97 + 14, btnBg);
+        String btnLabel = ignoreDark ? "Work Through Night: ON" : "Sleep at Night: ON";
+        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(btnLabel), 8 + 177 / 2, 100, 0xFFFFFF);
     }
 
     private boolean isRoleKitFilled() {

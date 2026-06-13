@@ -17,7 +17,8 @@ public class LocationTokenItem extends Item {
         COLLECT("Collect Token", "Source: collect items from here"),
         CRAFT("Craft Token",     "Bench: craft items at this block"),
         DEPOSIT("Deposit Token", "Deposit: store crafted items here"),
-        JOBSITE("Jobsite Token", "Jobsite: centre of the work area");
+        JOBSITE("Jobsite Token", "Jobsite: centre of the work area"),
+        BED("Bed Token",         "Bed: NPC sleeps here at night");
 
         public final String defaultName;
         public final String description;

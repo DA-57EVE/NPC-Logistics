@@ -120,6 +120,14 @@ public class ClientNetworking {
         ClientPlayNetworking.send(ModNetworking.TASK_TOGGLE_ONCE, buf);
     }
 
+    /** Toggles whether this worker ignores night darkness and keeps working. */
+    public static void sendToggleIgnoreDark(int workerEntityId, boolean value) {
+        PacketByteBuf buf = PacketByteBufs.create();
+        buf.writeInt(workerEntityId);
+        buf.writeBoolean(value);
+        ClientPlayNetworking.send(ModNetworking.TOGGLE_IGNORE_DARK, buf);
+    }
+
     /** Deletes (clears) a task row on the server. */
     public static void sendTaskDelete(int workerEntityId, int taskIndex) {
         PacketByteBuf buf = PacketByteBufs.create();

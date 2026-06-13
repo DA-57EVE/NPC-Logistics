@@ -32,15 +32,16 @@ public class EquipmentScreenHandler extends ScreenHandler {
     public static final int SLOT_OFFHAND  = 5;
     public static final int SLOT_WO1      = 6;
     public static final int SLOT_WO2      = 7;
-    public static final int EQUIPMENT_SLOTS  = 8;
+    public static final int SLOT_BED      = 8;   // bed token (left column, equip tab)
+    public static final int EQUIPMENT_SLOTS  = 9;
 
     // NPC cargo: 18-slot internal inventory shown on the Cargo tab.
-    // Placed after player inventory so player-inv indices (8-43) stay stable.
-    public static final int CARGO_SLOTS_START = EQUIPMENT_SLOTS + 36; // 44
+    // Placed after player inventory so player-inv indices (9-44) stay stable.
+    public static final int CARGO_SLOTS_START = EQUIPMENT_SLOTS + 36; // 45
     public static final int NPC_INV_SLOTS     = 18;
 
     // Task slots: 6 tasks × 4 slots = 24 (source, recipe, craft, deposit)
-    public static final int TASK_SLOTS_START = CARGO_SLOTS_START + NPC_INV_SLOTS; // 62
+    public static final int TASK_SLOTS_START = CARGO_SLOTS_START + NPC_INV_SLOTS; // 63
     public static final int MAX_TASKS        = LogisticsWorkerEntity.MAX_TASKS;
     public static final int TASK_SOURCE      = 0; // offset within a task row
     public static final int TASK_RECIPE      = 1;
@@ -48,16 +49,16 @@ public class EquipmentScreenHandler extends ScreenHandler {
     public static final int TASK_DEPOSIT     = 3;
 
     // Role kit: 3 slots (tool that defines the role, jobsite token, deposit token)
-    public static final int ROLE_SLOTS_START  = TASK_SLOTS_START + MAX_TASKS * 4; // 86
+    public static final int ROLE_SLOTS_START  = TASK_SLOTS_START + MAX_TASKS * 4; // 87
     public static final int ROLE_SLOTS        = 3;
     public static final int SLOT_ROLE_TOOL    = 0; // offset within role inventory
     public static final int SLOT_ROLE_JOBSITE = 1;
     public static final int SLOT_ROLE_DEPOSIT = 2;
 
-    // Role tab panel-local Y positions for the three role slots
-    public static final int ROLE_TOOL_Y    = 30;
-    public static final int ROLE_JOBSITE_Y = 56;
-    public static final int ROLE_DEPOSIT_Y = 82;
+    // Role tab panel-local Y positions — tighter spacing to free room for ignoreDark toggle
+    public static final int ROLE_TOOL_Y    = 22;
+    public static final int ROLE_JOBSITE_Y = 40;
+    public static final int ROLE_DEPOSIT_Y = 58;
 
     // Slot Y positions — shared with EquipmentScreen for layout alignment
     public static final int INVENTORY_SLOT_Y = 163;
@@ -77,6 +78,8 @@ public class EquipmentScreenHandler extends ScreenHandler {
     public final boolean canTakeWo2;
     public final boolean isEmployer;
     public final String  workerEmployerName;
+    /** Mirrors the entity's ignoreDark flag; updated in real-time via packet and saved on close. */
+    public boolean ignoreDark;
 
     // Task metadata (parallel to task item slots)
     public final boolean[] taskRunOnce     = new boolean[MAX_TASKS];
@@ -101,6 +104,7 @@ public class EquipmentScreenHandler extends ScreenHandler {
         this.canTakeWo2          = true;
         this.isEmployer          = worker.isEmployer(playerInventory.player.getUuid());
         this.workerEmployerName  = worker.getEmployerName();
+        this.ignoreDark          = worker.isIgnoreDark();
 
         this.equipmentInventory = new SimpleInventory(EQUIPMENT_SLOTS);
         equipmentInventory.setStack(SLOT_HEAD,     worker.getEquippedStack(EquipmentSlot.HEAD).copy());
@@ -111,6 +115,7 @@ public class EquipmentScreenHandler extends ScreenHandler {
         equipmentInventory.setStack(SLOT_OFFHAND,  worker.getEquippedStack(EquipmentSlot.OFFHAND).copy());
         equipmentInventory.setStack(SLOT_WO1,      worker.getWoScroll1().copy());
         equipmentInventory.setStack(SLOT_WO2,      worker.getWoScroll2().copy());
+        equipmentInventory.setStack(SLOT_BED,      worker.getBedToken().copy());
 
         this.cargoInventory = new SimpleInventory(NPC_INV_SLOTS);
         net.minecraft.inventory.SimpleInventory npcInv = worker.getWorkerInventory();
@@ -153,6 +158,7 @@ public class EquipmentScreenHandler extends ScreenHandler {
             case CRAFT   -> com.npclogistics.item.ModItems.LOCATION_TOKEN_CRAFT;
             case DEPOSIT -> com.npclogistics.item.ModItems.LOCATION_TOKEN_DEPOSIT;
             case JOBSITE -> com.npclogistics.item.ModItems.LOCATION_TOKEN_JOBSITE;
+            case BED     -> com.npclogistics.item.ModItems.LOCATION_TOKEN_BED;
         };
         ItemStack stack = new ItemStack(item);
         LocationTokenItem.stampPos(stack, pos, "");
@@ -169,6 +175,7 @@ public class EquipmentScreenHandler extends ScreenHandler {
         this.canTakeWo2         = buf.readBoolean();
         this.isEmployer         = buf.readBoolean();
         this.workerEmployerName = buf.readString(64);
+        this.ignoreDark         = buf.readBoolean();
 
         for (int i = 0; i < MAX_TASKS; i++) {
             taskRunOnce[i]     = buf.readBoolean();
@@ -195,6 +202,7 @@ public class EquipmentScreenHandler extends ScreenHandler {
         addSlot(new ArmorSlot(equipmentInventory,     SLOT_CHEST,    8,   38, EquipmentSlot.CHEST));
         addSlot(new ArmorSlot(equipmentInventory,     SLOT_LEGS,     8,   58, EquipmentSlot.LEGS));
         addSlot(new ArmorSlot(equipmentInventory,     SLOT_FEET,     8,   78, EquipmentSlot.FEET));
+        addSlot(new DisablableTokenSlot(equipmentInventory, SLOT_BED, 8, 98, LocationTokenItem.TokenType.BED));
         addSlot(new HandSlot(equipmentInventory,      SLOT_MAINHAND, 152, 38));
         addSlot(new HandSlot(equipmentInventory,      SLOT_OFFHAND,  152, 58));
         addSlot(new WorkOrderSlot(equipmentInventory, SLOT_WO1,      152, 78));
@@ -273,6 +281,8 @@ public class EquipmentScreenHandler extends ScreenHandler {
 
     // ── Task metadata mutators (called from network handlers) ─────────────────
 
+    public void setIgnoreDark(boolean value) { this.ignoreDark = value; }
+
     public void setTaskRunOnce(int idx, boolean value) {
         if (idx < 0 || idx >= MAX_TASKS) return;
         taskRunOnce[idx]   = value;
@@ -320,6 +330,8 @@ public class EquipmentScreenHandler extends ScreenHandler {
         worker.equipStack(EquipmentSlot.OFFHAND,  equipmentInventory.getStack(SLOT_OFFHAND));
         worker.setWoScroll1(equipmentInventory.getStack(SLOT_WO1).copy());
         worker.setWoScroll2(equipmentInventory.getStack(SLOT_WO2).copy());
+        worker.setBedToken(equipmentInventory.getStack(SLOT_BED).copy());
+        worker.setIgnoreDark(ignoreDark);
 
         // Write any cargo changes (player may have taken items) back to the NPC.
         net.minecraft.inventory.SimpleInventory npcInv = worker.getWorkerInventory();
@@ -405,7 +417,11 @@ public class EquipmentScreenHandler extends ScreenHandler {
                 return ItemStack.EMPTY;
             }
         } else if (stack.getItem() instanceof LocationTokenItem token) {
-            if (token.tokenType == LocationTokenItem.TokenType.JOBSITE) {
+            if (token.tokenType == LocationTokenItem.TokenType.BED) {
+                // BED tokens go to the bed slot on the equip tab
+                if (!slots.get(SLOT_BED).hasStack())
+                    if (!insertItem(stack, SLOT_BED, SLOT_BED + 1, false)) return ItemStack.EMPTY;
+            } else if (token.tokenType == LocationTokenItem.TokenType.JOBSITE) {
                 // JOBSITE tokens go to the role jobsite slot
                 int target = ROLE_SLOTS_START + SLOT_ROLE_JOBSITE;
                 if (!slots.get(target).hasStack())

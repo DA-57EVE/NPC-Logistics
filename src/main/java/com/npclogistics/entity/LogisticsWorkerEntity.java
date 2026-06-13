@@ -3,6 +3,7 @@ package com.npclogistics.entity;
 import com.npclogistics.NPClogistics;
 import com.npclogistics.ai.CraftingTaskBrain;
 import com.npclogistics.ai.FarmerBrain;
+import com.npclogistics.ai.NightBrain;
 import com.npclogistics.ai.ShepherdBrain;
 import com.npclogistics.ai.WorkOrderBrain;
 import com.npclogistics.data.CraftingTask;
@@ -105,6 +106,13 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     private final FarmerBrain farmerBrain;
     private final ShepherdBrain shepherdBrain;
     private final CraftingTaskBrain craftingTaskBrain;
+    private final NightBrain nightBrain;
+
+    // ── Night behaviour ───────────────────────────────────────────────────────
+    /** Optional: stamped Bed Token; NPC navigates here at night. Empty = scan for a bed. */
+    private ItemStack bedToken  = ItemStack.EMPTY;
+    /** When true, the NPC works through the night regardless of ambient light. */
+    private boolean ignoreDark  = false;
 
     // Work-order scroll slots — items placed by players via the equipment GUI.
     // Depositor UUID is stamped into the scroll's own NBT ("depositedBy").
@@ -148,6 +156,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         farmerBrain        = new FarmerBrain(this);
         shepherdBrain      = new ShepherdBrain(this);
         craftingTaskBrain  = new CraftingTaskBrain(this);
+        nightBrain         = new NightBrain(this);
         ((net.minecraft.entity.ai.pathing.MobNavigation) getNavigation()).setCanPathThroughDoors(true);
     }
 
@@ -180,6 +189,22 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     public void setRoleTool(ItemStack s)    { roleTool    = s.isEmpty() ? ItemStack.EMPTY : s; }
     public void setRoleJobsite(ItemStack s) { roleJobsite = s.isEmpty() ? ItemStack.EMPTY : s; }
     public void setRoleDeposit(ItemStack s) { roleDeposit = s.isEmpty() ? ItemStack.EMPTY : s; }
+
+    public ItemStack getBedToken()           { return bedToken; }
+    public void setBedToken(ItemStack s)     { bedToken = s.isEmpty() ? ItemStack.EMPTY : s; }
+    public boolean isIgnoreDark()            { return ignoreDark; }
+    public void setIgnoreDark(boolean v)     { ignoreDark = v; }
+
+    /**
+     * Returns true between dusk (13000) and pre-dawn (23500) unless the NPC is set to
+     * ignore darkness.  Role brains and all other work brains are bypassed during this window
+     * so the NPC can sleep.
+     */
+    public boolean isTooDarkToWork(ServerWorld world) {
+        if (ignoreDark) return false;
+        long dt = world.getTimeOfDay() % 24000;
+        return dt >= 13000 && dt < 23500;
+    }
 
     /** True when all three role slots carry valid items — overrides work orders while active. */
     public boolean isRoleActive() {
@@ -256,7 +281,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
 
     private static final long[] FIRE_TIMES = { 1000L, 6000L, 13000L }; // morning/midday/evening
 
-    private void checkAutoFire(ServerWorld world) {
+    private void checkAutoFire(ServerWorld world) { // called with the already-cast sw
         long absTime  = world.getTime();
         long day      = absTime / 24000;
         long dayTime  = absTime % 24000;
@@ -390,6 +415,16 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
 
         if (interactionCooldown > 0) interactionCooldown--;
 
+        ServerWorld sw = (ServerWorld) getWorld();
+
+        // Night check: highest priority — overrides roles, work orders, and tasks.
+        if (isTooDarkToWork(sw)) {
+            nightBrain.tick(sw);
+            return;
+        }
+        // Dawn just broke — clear sleeping pose if we were in bed.
+        nightBrain.wakeIfSleeping(sw);
+
         // Role has highest priority: while all three kit slots are filled, the farmer
         // (or other role) brain handles all movement and action — work orders/tasks ignored.
         if (isRoleActive()) {
@@ -399,8 +434,8 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
                 roleWasActive = true;
             }
             switch (activeRole()) {
-                case FARMER   -> { setStepHeight(0.6f); farmerBrain.tick((ServerWorld) getWorld()); }
-                case SHEPHERD -> { setStepHeight(0.6f); shepherdBrain.tick((ServerWorld) getWorld()); }
+                case FARMER   -> { setStepHeight(0.6f); farmerBrain.tick(sw); }
+                case SHEPHERD -> { setStepHeight(0.6f); shepherdBrain.tick(sw); }
             }
             return;
         }
@@ -411,16 +446,16 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         setStepHeight(0.6f);
 
         switch (state) {
-            case EXECUTING       -> workOrderBrain.tick((ServerWorld) getWorld());
+            case EXECUTING       -> workOrderBrain.tick(sw);
             case RETURNING       -> tickReturning();
             case EXECUTING_TASK  -> tickExecutingTask();
-            case IDLE            -> checkAutoFire((ServerWorld) getWorld());
+            case IDLE            -> checkAutoFire(sw);
         }
 
         // Push route data to any nearby goggle-wearing players every 20 ticks.
         if (++goggleSyncTimer >= 20) {
             goggleSyncTimer = 0;
-            syncRouteToGoggles((ServerWorld) getWorld());
+            syncRouteToGoggles(sw);
         }
     }
 
@@ -430,7 +465,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         double dist = getPos().distanceTo(homePos.toCenterPos());
         if (dist > 1.5) {
             if (getNavigation().isIdle()) {
-                getNavigation().startMovingTo(homePos.getX() + 0.5, homePos.getY(), homePos.getZ() + 0.5, 0.8);
+                getNavigation().startMovingTo(homePos.getX() + 0.5, homePos.getY(), homePos.getZ() + 0.5, 0.9);
             }
         } else {
             getNavigation().stop();
@@ -548,6 +583,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
                     buf.writeBoolean(canPlayerTakeScroll(p, woScroll2));
                     buf.writeBoolean(isEmployer(p.getUuid()));
                     buf.writeString(employerName);   // shown as "Employed by: [name]"
+                    buf.writeBoolean(ignoreDark);
                     // Task metadata (item stacks are synced automatically by ScreenHandler)
                     for (int i = 0; i < MAX_TASKS; i++) {
                         CraftingTask t = tasks[i];
@@ -796,6 +832,8 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         if (!roleTool.isEmpty())    nbt.put("roleTool",    roleTool.writeNbt(new NbtCompound()));
         if (!roleJobsite.isEmpty()) nbt.put("roleJobsite", roleJobsite.writeNbt(new NbtCompound()));
         if (!roleDeposit.isEmpty()) nbt.put("roleDeposit", roleDeposit.writeNbt(new NbtCompound()));
+        if (!bedToken.isEmpty())    nbt.put("bedToken",    bedToken.writeNbt(new NbtCompound()));
+        nbt.putBoolean("ignoreDark", ignoreDark);
 
         if (activeWorkOrder != null) {
             nbt.put("workOrder", activeWorkOrder.toNbt());
@@ -842,6 +880,8 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         roleTool    = nbt.contains("roleTool")    ? ItemStack.fromNbt(nbt.getCompound("roleTool"))    : ItemStack.EMPTY;
         roleJobsite = nbt.contains("roleJobsite") ? ItemStack.fromNbt(nbt.getCompound("roleJobsite")) : ItemStack.EMPTY;
         roleDeposit = nbt.contains("roleDeposit") ? ItemStack.fromNbt(nbt.getCompound("roleDeposit")) : ItemStack.EMPTY;
+        bedToken    = nbt.contains("bedToken")    ? ItemStack.fromNbt(nbt.getCompound("bedToken"))    : ItemStack.EMPTY;
+        ignoreDark  = nbt.contains("ignoreDark") && nbt.getBoolean("ignoreDark");
 
         if (nbt.contains("workOrder")) {
             activeWorkOrder = WorkOrder.fromNbt(nbt.getCompound("workOrder"));

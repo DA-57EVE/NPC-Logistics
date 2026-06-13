@@ -114,6 +114,7 @@ public class NPClogistics implements ModInitializer {
             case COLLECT, DEPOSIT -> world.getBlockEntity(pos) instanceof Inventory;
             case CRAFT             -> world.getBlockState(pos).isOf(Blocks.CRAFTING_TABLE);
             case JOBSITE           -> !world.getBlockState(pos).isAir();
+            case BED               -> world.getBlockState(pos).getBlock() instanceof net.minecraft.block.BedBlock;
         };
     }
 }

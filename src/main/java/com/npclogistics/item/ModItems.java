@@ -45,6 +45,13 @@ public class ModItems {
             new LocationTokenItem(new FabricItemSettings().maxCount(1), LocationTokenItem.TokenType.JOBSITE)
     );
 
+    /** Light blue — records a bed position for the NPC to sleep in at night. */
+    public static final LocationTokenItem LOCATION_TOKEN_BED = Registry.register(
+            Registries.ITEM,
+            new Identifier(NPClogistics.MOD_ID, "location_token_bed"),
+            new LocationTokenItem(new FabricItemSettings().maxCount(1), LocationTokenItem.TokenType.BED)
+    );
+
     /** Helmet-slot utility item — when worn, renders nearby workers' route overlays. */
     public static final WorkGogglesItem WORK_GOGGLES = Registry.register(
             Registries.ITEM,
@@ -60,6 +67,7 @@ public class ModItems {
             entries.add(LOCATION_TOKEN_CRAFT);
             entries.add(LOCATION_TOKEN_DEPOSIT);
             entries.add(LOCATION_TOKEN_JOBSITE);
+            entries.add(LOCATION_TOKEN_BED);
             entries.add(WORK_GOGGLES);
         });
     }

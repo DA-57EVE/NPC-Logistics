@@ -37,7 +37,7 @@ import java.util.*;
 public class CraftingTaskBrain {
 
     private static final double ARRIVAL_DIST = 2.5;
-    private static final double NAV_SPEED    = 0.8;
+    private static final double NAV_SPEED    = 0.9;
     private static final int    OPEN_HOLD    = 20;   // ticks before items move (lid open)
     private static final int    CRAFT_TICKS  = 40;   // work pause at a crafting table
     private static final int    SMELT_TICKS  = 200;  // simulated smelting time (10 s)

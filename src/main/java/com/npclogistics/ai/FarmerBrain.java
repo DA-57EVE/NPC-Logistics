@@ -30,7 +30,7 @@ public class FarmerBrain {
     private static final int    WORK_TICKS    = 20;
     private static final int    DEPOSIT_TICKS = 40;
     private static final int    WAIT_INTERVAL = 200; // ticks between scans while waiting at deposit chest
-    private static final double NAV_SPEED     = 0.8;
+    private static final double NAV_SPEED     = 0.9;
 
     private enum FarmerPhase { SCANNING, NAVIGATING, WORKING, DEPOSITING, WAITING }
     private enum WorkType    { HARVEST, PLANT, PICKUP, HOE }

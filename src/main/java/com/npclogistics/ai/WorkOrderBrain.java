@@ -113,11 +113,11 @@ public class WorkOrderBrain {
             if (currentApproach.equals(stop.pos)) {
                 strictArrival = false;
                 worker.getNavigation().startMovingTo(
-                        stop.pos.getX() + 0.5, stop.pos.getY(), stop.pos.getZ() + 0.5, 0.8);
+                        stop.pos.getX() + 0.5, stop.pos.getY(), stop.pos.getZ() + 0.5, 0.9);
             } else {
                 strictArrival = true;
                 worker.getNavigation().startMovingTo(
-                        currentApproach.getX() + 0.5, currentApproach.getY(), currentApproach.getZ() + 0.5, 0.8);
+                        currentApproach.getX() + 0.5, currentApproach.getY(), currentApproach.getZ() + 0.5, 0.9);
             }
         }
     }

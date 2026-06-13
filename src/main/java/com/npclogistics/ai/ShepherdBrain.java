@@ -36,7 +36,7 @@ public class ShepherdBrain {
     private static final int    WORK_TICKS         = 15;
     private static final int    DEPOSIT_TICKS      = 40;
     private static final int    SCAN_INTERVAL      = 60;
-    private static final double NAV_SPEED          = 0.8;
+    private static final double NAV_SPEED          = 0.9;
     private static final int    WAIT_INTERVAL      = 200; // ticks between scans while waiting at deposit chest
     private static final int    TRANSIT_TIMEOUT    = 400; // 20 s — ENTERING or EXITING
     private static final int    NAV_TIMEOUT        = 100; // 5 s — NAVIGATING_SHEEP
