@@ -55,10 +55,10 @@ public class EquipmentScreenHandler extends ScreenHandler {
     public static final int SLOT_ROLE_JOBSITE = 1;
     public static final int SLOT_ROLE_DEPOSIT = 2;
 
-    // Role tab panel-local Y positions — tighter spacing to free room for ignoreDark toggle
-    public static final int ROLE_TOOL_Y    = 22;
-    public static final int ROLE_JOBSITE_Y = 40;
-    public static final int ROLE_DEPOSIT_Y = 58;
+    // Role tab panel-local Y positions — slots start below the "ROLE KIT" header (y=19+9=28)
+    public static final int ROLE_TOOL_Y    = 28;
+    public static final int ROLE_JOBSITE_Y = 46;
+    public static final int ROLE_DEPOSIT_Y = 64;
 
     // Slot Y positions — shared with EquipmentScreen for layout alignment
     public static final int INVENTORY_SLOT_Y = 163;

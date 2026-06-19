@@ -209,7 +209,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
                     ignoreDark = !ignoreDark;
                     ClientNetworking.sendToggleIgnoreDark(handler.workerEntityId, ignoreDark);
                 })
-                .dimensions(x + 8, y + 97, 177, 14)
+                .dimensions(x + 8, y + 103, 177, 14)
                 .tooltip(Tooltip.of(
                         Text.literal("When ON, this NPC ignores night-time and keeps working")))
                 .build());
@@ -513,7 +513,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         slotBgTinted(ctx, x + 8, y + EquipmentScreenHandler.ROLE_JOBSITE_Y, 0xFF446688);
         slotBgTinted(ctx, x + 8, y + EquipmentScreenHandler.ROLE_DEPOSIT_Y, 0xFF226633);
         // Night divider
-        ctx.fill(x + 8, y + 77, x + 192, y + 78, C_DIVIDER);
+        ctx.fill(x + 8, y + 83, x + 192, y + 84, C_DIVIDER);
         ctx.fill(x + 7, y + SEP1_Y,     x + 193, y + SEP1_Y + 1, C_BORDER);
         ctx.fill(x + 7, y + SEP1_Y + 1, x + 193, y + SEP2_Y,     C_PANEL);
     }
@@ -541,11 +541,12 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         drawRight(ctx, "Order 1", 148, 83,  C_MUTED);
         drawRight(ctx, "Order 2", 148, 103, C_MUTED);
 
-        // Employer line — italic, 80% scale, just above the profile separator
+        // Employer line — italic, 80% scale, right-aligned under panel title
         String empLabel = handler.workerEmployerName.isBlank()
                 ? "Employer: (unclaimed)" : "Employer: " + handler.workerEmployerName;
         ctx.getMatrices().push();
-        ctx.getMatrices().translate(8, SEP1_Y - 10, 0);
+        float scaledEmpW = textRenderer.getWidth(empLabel) * 0.8f;
+        ctx.getMatrices().translate(192 - scaledEmpW, 16, 0);
         ctx.getMatrices().scale(0.8f, 0.8f, 1.0f);
         ctx.drawText(textRenderer, Text.literal(empLabel).formatted(Formatting.ITALIC), 0, 0, C_ACCENT, false);
         ctx.getMatrices().pop();
@@ -667,23 +668,23 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
             statusColor = C_ROLE_INACTIVE;
         }
 
-        // Role kit status — scaled down to fit below deposit slot, above night divider
+        // Role kit status — scaled down, sits between deposit slot and night divider
         ctx.getMatrices().push();
-        ctx.getMatrices().translate(10, 79, 0);
+        ctx.getMatrices().translate(10, 84, 0);
         ctx.getMatrices().scale(0.85f, 0.85f, 1.0f);
         ctx.drawText(textRenderer, statusText, 0, 0, statusColor, false);
         ctx.getMatrices().pop();
 
         // Night behavior section
-        ctx.drawText(textRenderer, "Night behavior:", 10, 91, C_BED, false);
+        ctx.drawText(textRenderer, "Night behavior:", 10, 93, C_BED, false);
 
         // ignoreDark button overlay — draws on top of the invisible ButtonWidget
         int btnBg = ignoreDark
                 ? (ignoreDarkBtn.isHovered() ? 0xFF5577BB : 0xFF335599)
                 : (ignoreDarkBtn.isHovered() ? 0xFF444455 : 0xFF252530);
-        ctx.fill(8, 97, 8 + 177, 97 + 14, btnBg);
+        ctx.fill(8, 103, 8 + 177, 103 + 14, btnBg);
         String btnLabel = ignoreDark ? "Work Through Night: ON" : "Sleep at Night: ON";
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(btnLabel), 8 + 177 / 2, 100, 0xFFFFFF);
+        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(btnLabel), 8 + 177 / 2, 106, 0xFFFFFF);
     }
 
     private boolean isRoleKitFilled() {

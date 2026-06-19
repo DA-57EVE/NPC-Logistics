@@ -4,7 +4,10 @@ import com.npclogistics.NPClogistics;
 import com.npclogistics.entity.LogisticsWorkerEntity;
 import com.npclogistics.item.LocationTokenItem;
 import net.minecraft.block.BedBlock;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.DoorBlock;
+import net.minecraft.block.enums.BedPart;
+import net.minecraft.state.property.Properties;
 import net.minecraft.entity.EntityPose;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
@@ -60,20 +63,19 @@ public class NightBrain {
     /** Called once when daylight returns.  Clears sleeping pose and resets for next night. */
     public void wakeIfSleeping(ServerWorld world) {
         if (!settled) return;
-        if (inBed) {
-            worker.clearSleepingPosition();
+        if (inBed && bedBlockPos != null) {
             // Move to a safe floor space beside the bed before standing to avoid
-            // clipping into a low ceiling (entity feet are at bedY+0.5625 while sleeping).
-            if (bedBlockPos != null) {
-                BlockPos standPos = findSafeStandPosition(world, bedBlockPos);
-                if (standPos != null) {
-                    worker.refreshPositionAndAngles(
-                            standPos.getX() + 0.5, standPos.getY(),
-                            standPos.getZ() + 0.5, worker.getYaw(), worker.getPitch());
-                }
+            // clipping into a low ceiling.
+            BlockPos standPos = findSafeStandPosition(world, bedBlockPos);
+            if (standPos != null) {
+                worker.refreshPositionAndAngles(
+                        standPos.getX() + 0.5, standPos.getY(),
+                        standPos.getZ() + 0.5, worker.getYaw(), worker.getPitch());
             }
-            worker.setPose(EntityPose.STANDING);
         }
+        // Always clear sleeping state — stale SLEEPING pose must never survive into daytime.
+        worker.clearSleepingPosition();
+        worker.setPose(EntityPose.STANDING);
         worker.getNavigation().stop();
         settled      = false;
         inBed        = false;
@@ -149,18 +151,18 @@ public class NightBrain {
         // 1. Assigned bed token.
         BlockPos tokenPos = getBedTokenPos();
         if (tokenPos != null) {
-            sleepTarget = tokenPos;
-            bedBlockPos = tokenPos;
-            NPClogistics.LOGGER.info("{} night: heading to assigned bed at {}.", worker.getName().getString(), tokenPos);
+            bedBlockPos = resolveBedHead(world, tokenPos);
+            sleepTarget = bedBlockPos;
+            NPClogistics.LOGGER.info("{} night: heading to assigned bed at {}.", worker.getName().getString(), bedBlockPos);
             return;
         }
 
         // 2. Scan for any nearby bed block.
         BlockPos nearestBed = scanForBed(world);
         if (nearestBed != null) {
-            sleepTarget = nearestBed;
-            bedBlockPos = nearestBed;
-            NPClogistics.LOGGER.info("{} night: heading to nearby bed at {}.", worker.getName().getString(), nearestBed);
+            bedBlockPos = resolveBedHead(world, nearestBed);
+            sleepTarget = bedBlockPos;
+            NPClogistics.LOGGER.info("{} night: heading to nearby bed at {}.", worker.getName().getString(), bedBlockPos);
             return;
         }
 
@@ -192,10 +194,13 @@ public class NightBrain {
             // If the room is too cramped (all adjacent spots blocked or ceiling too low), fall through
             // to in-place snoring — better than waking up clipped into the ceiling.
             inBed = true;
+            // Offset 0.25 blocks toward foot so the NPC isn't pressed against the headboard.
+            BlockState headState = world.getBlockState(bedBlockPos);
+            Direction towardFoot = headState.get(Properties.HORIZONTAL_FACING).getOpposite();
             worker.refreshPositionAndAngles(
-                    bedBlockPos.getX() + 0.5,
-                    bedBlockPos.getY() + 0.5625,  // top of bed block (9/16)
-                    bedBlockPos.getZ() + 0.5,
+                    bedBlockPos.getX() + 0.5 + 0.25 * towardFoot.getOffsetX(),
+                    bedBlockPos.getY() + 0.5625,
+                    bedBlockPos.getZ() + 0.5 + 0.25 * towardFoot.getOffsetZ(),
                     worker.getYaw(), worker.getPitch());
             worker.setSleepingPosition(bedBlockPos);
             worker.setPose(EntityPose.SLEEPING);
@@ -248,6 +253,21 @@ public class NightBrain {
             }
         }
         return best;
+    }
+
+    /**
+     * If pos is the FOOT half of a bed, returns the HEAD half; otherwise returns pos unchanged.
+     * Beds must be slept in at the HEAD so the entity renders in the correct half.
+     */
+    private BlockPos resolveBedHead(ServerWorld world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof BedBlock)) return pos;
+        if (state.get(Properties.BED_PART) == BedPart.FOOT) {
+            BlockPos head = pos.offset(state.get(Properties.HORIZONTAL_FACING));
+            if (world.getBlockState(head).getBlock() instanceof BedBlock)
+                return head.toImmutable();
+        }
+        return pos;
     }
 
     /** Returns a position 2 blocks past the nearest door, on the inside of the building. */
