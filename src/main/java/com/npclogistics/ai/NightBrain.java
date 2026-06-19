@@ -194,13 +194,12 @@ public class NightBrain {
             // If the room is too cramped (all adjacent spots blocked or ceiling too low), fall through
             // to in-place snoring — better than waking up clipped into the ceiling.
             inBed = true;
-            // Offset 0.25 blocks toward foot so the NPC isn't pressed against the headboard.
             BlockState headState = world.getBlockState(bedBlockPos);
             Direction towardFoot = headState.get(Properties.HORIZONTAL_FACING).getOpposite();
             worker.refreshPositionAndAngles(
-                    bedBlockPos.getX() + 0.5 + 0.25 * towardFoot.getOffsetX(),
+                    bedBlockPos.getX() + 0.5 + 0.1 * towardFoot.getOffsetX(),
                     bedBlockPos.getY() + 0.5625,
-                    bedBlockPos.getZ() + 0.5 + 0.25 * towardFoot.getOffsetZ(),
+                    bedBlockPos.getZ() + 0.5 + 0.1 * towardFoot.getOffsetZ(),
                     worker.getYaw(), worker.getPitch());
             worker.setSleepingPosition(bedBlockPos);
             worker.setPose(EntityPose.SLEEPING);

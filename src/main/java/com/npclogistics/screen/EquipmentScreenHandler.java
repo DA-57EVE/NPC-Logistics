@@ -198,15 +198,16 @@ public class EquipmentScreenHandler extends ScreenHandler {
     // ── Slot registration ─────────────────────────────────────────────────────
 
     private void addEquipmentSlots() {
-        addSlot(new ArmorSlot(equipmentInventory,     SLOT_HEAD,     8,   18, EquipmentSlot.HEAD));
-        addSlot(new ArmorSlot(equipmentInventory,     SLOT_CHEST,    8,   38, EquipmentSlot.CHEST));
-        addSlot(new ArmorSlot(equipmentInventory,     SLOT_LEGS,     8,   58, EquipmentSlot.LEGS));
-        addSlot(new ArmorSlot(equipmentInventory,     SLOT_FEET,     8,   78, EquipmentSlot.FEET));
-        addSlot(new DisablableTokenSlot(equipmentInventory, SLOT_BED, 8, 98, LocationTokenItem.TokenType.BED));
-        addSlot(new HandSlot(equipmentInventory,      SLOT_MAINHAND, 152, 38));
-        addSlot(new HandSlot(equipmentInventory,      SLOT_OFFHAND,  152, 58));
-        addSlot(new WorkOrderSlot(equipmentInventory, SLOT_WO1,      152, 78));
-        addSlot(new WorkOrderSlot(equipmentInventory, SLOT_WO2,      152, 98));
+        // Order must match the SLOT_* constants (0-8) so screen-slot-index == inventory-slot-index.
+        addSlot(new ArmorSlot(equipmentInventory,          SLOT_HEAD,     8,   18, EquipmentSlot.HEAD));
+        addSlot(new ArmorSlot(equipmentInventory,          SLOT_CHEST,    8,   38, EquipmentSlot.CHEST));
+        addSlot(new ArmorSlot(equipmentInventory,          SLOT_LEGS,     8,   58, EquipmentSlot.LEGS));
+        addSlot(new ArmorSlot(equipmentInventory,          SLOT_FEET,     8,   78, EquipmentSlot.FEET));
+        addSlot(new HandSlot(equipmentInventory,           SLOT_MAINHAND, 152, 38));
+        addSlot(new HandSlot(equipmentInventory,           SLOT_OFFHAND,  152, 58));
+        addSlot(new WorkOrderSlot(equipmentInventory,      SLOT_WO1,      152, 78));
+        addSlot(new WorkOrderSlot(equipmentInventory,      SLOT_WO2,      152, 98));
+        addSlot(new DisablableTokenSlot(equipmentInventory,SLOT_BED,      8,   98, LocationTokenItem.TokenType.BED));
     }
 
     private void addPlayerInventorySlots(PlayerInventory playerInventory) {

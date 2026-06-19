@@ -415,23 +415,32 @@ public class FarmerBrain {
         restockSeeds(container);
     }
 
-    /** Take up to 16 of each seed type back from the deposit chest into the NPC's inventory. */
+    /** Take up to 16 of each seed type back from the deposit chest into the NPC's inventory.
+     *  Caps at 16 total per type across all chest slots, not 16 per slot. */
     private void restockSeeds(Inventory container) {
-        SimpleInventory npcInv = worker.getWorkerInventory();
+        int takenCarrot = 0, takenPotato = 0, takenWheatSeed = 0, takenBeetrootSeed = 0;
         for (int j = 0; j < container.size(); j++) {
             ItemStack slot = container.getStack(j);
             if (slot.isEmpty()) continue;
             Item item = slot.getItem();
-            if (item != Items.WHEAT_SEEDS && item != Items.CARROT
-                    && item != Items.POTATO && item != Items.BEETROOT_SEEDS) continue;
-            int take = Math.min(slot.getCount(), 16);
-            ItemStack toTake = slot.copy();
-            toTake.setCount(take);
+            int already, need;
+            if      (item == Items.CARROT)         { already = takenCarrot;       need = 16 - takenCarrot; }
+            else if (item == Items.POTATO)         { already = takenPotato;       need = 16 - takenPotato; }
+            else if (item == Items.WHEAT_SEEDS)    { already = takenWheatSeed;    need = 16 - takenWheatSeed; }
+            else if (item == Items.BEETROOT_SEEDS) { already = takenBeetrootSeed; need = 16 - takenBeetrootSeed; }
+            else continue;
+            if (need <= 0) continue;
+            int take = Math.min(slot.getCount(), need);
+            ItemStack toTake = new ItemStack(item, take);
             ItemStack remainder = worker.addToWorkerInventory(toTake);
             int taken = take - remainder.getCount();
             if (taken > 0) {
                 slot.decrement(taken);
                 if (slot.isEmpty()) container.setStack(j, ItemStack.EMPTY);
+                if      (item == Items.CARROT)         takenCarrot       += taken;
+                else if (item == Items.POTATO)         takenPotato       += taken;
+                else if (item == Items.WHEAT_SEEDS)    takenWheatSeed    += taken;
+                else if (item == Items.BEETROOT_SEEDS) takenBeetrootSeed += taken;
             }
         }
         container.markDirty();
@@ -553,18 +562,22 @@ public class FarmerBrain {
         return true;
     }
 
-    /** True when the inventory holds produce worth depositing (ignores seeds and small carrot/potato replant stock). */
+    /** True when the inventory holds produce worth depositing.
+     *  Wheat/beetroot seeds are never deposited; carrots/potatoes only trigger deposit
+     *  when their total across all slots exceeds the 16-item replant reserve. */
     private boolean hasItemsToDeposit() {
         SimpleInventory inv = worker.getWorkerInventory();
+        int totalCarrot = 0, totalPotato = 0;
         for (int i = 0; i < inv.size(); i++) {
             ItemStack s = inv.getStack(i);
             if (s.isEmpty()) continue;
             Item item = s.getItem();
             if (item == Items.WHEAT_SEEDS || item == Items.BEETROOT_SEEDS) continue;
-            if ((item == Items.CARROT || item == Items.POTATO) && s.getCount() <= 16) continue;
-            return true;
+            if (item == Items.CARROT)  { totalCarrot  += s.getCount(); continue; }
+            if (item == Items.POTATO)  { totalPotato  += s.getCount(); continue; }
+            return true; // any other non-seed item (wheat, beetroot, etc.) → deposit
         }
-        return false;
+        return totalCarrot > 16 || totalPotato > 16;
     }
 
     private static List<ItemStack> getCropDrops(Block cropBlock) {

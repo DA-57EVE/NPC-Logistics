@@ -376,6 +376,11 @@ used as the flat `layer0` fallback.
 
 ## Changelog
 
+### v1.3.6 (2026-06-19)
+- **Bug — Equipment tab tooltip:** hovering the Order 2 slot incorrectly showed "Bed Token" as the slot label; fixed by correcting the slot registration order so screen-slot index matches inventory index.
+- **Bug — Farmer carrot/potato deposit:** workers retained carrots and potatoes when the total was split across multiple small inventory stacks (each under the 16-item threshold). Deposit now checks the per-type total across all slots.
+- **NPC sleeping position:** sleeping offset reduced from 0.25 to 0.1 blocks toward the foot, placing the worker's head closer to the headboard.
+
 ### v1.3.5 (2026-06-19)
 - **UI — Equipment tab:** Employer label moved to the top-right corner; no longer overlaps the Bed Token slot.
 - **UI — Role tab:** ROLE KIT header no longer overlaps the tool/jobsite/deposit slot row; Sleep at Night button has added top padding to prevent overlap with the "Night behavior:" label.
