@@ -88,18 +88,32 @@ The primary tool for recording and assigning delivery routes. Found in the creat
 
 ### Location Tokens
 
-Three 3D coin-shaped items used to mark locations for **Crafting Tasks**.
-Each token records a block position when right-clicked on a container or workstation.
+Five 3D coin-shaped items used to mark locations for roles and crafting tasks.
+Each token records a block position when right-clicked on a container, workstation, or any block.
 
 | Token | Colour | Purpose |
 |-------|--------|---------|
 | **Collect Token** | Blue | Marks the chest/barrel to collect raw materials from |
 | **Craft Token** | Amber | Marks the crafting station (crafting table, furnace, etc.) |
 | **Deposit Token** | Green | Marks the chest/barrel to deposit finished items into |
+| **Jobsite Token** | Purple | Centre of a role worker's active job area (farm, pen, etc.) |
+| **Bed Token** | Light blue | Bed the worker sleeps in at night |
 
-Tokens are obtained from the creative *Tools & Utilities* tab. Right-click a block to
-record its position into the token; the tooltip shows the stored coordinates.
-Place them in a worker's **Task slots** to define a crafting task route.
+Tokens are obtained from the creative *Tools & Utilities* tab or crafted in survival.
+Right-click a block to record its position into the token; the tooltip shows the stored
+coordinates.
+
+#### Crafting recipes (shapeless)
+
+| Token | Ingredients |
+|-------|-------------|
+| Work Order Scroll | Paper + Paper + Feather + Ink Sac |
+| Collect Token | Gold Ingot + Lapis Lazuli |
+| Craft Token | Gold Ingot + Blaze Powder |
+| Deposit Token | Gold Ingot + Emerald |
+| Jobsite Token | Gold Ingot + Compass |
+| Bed Token | Gold Ingot + Feather |
+| Work Goggles | 2× Glass Pane + Iron Ingot + Gold Ingot |
 
 ---
 
@@ -154,10 +168,13 @@ Manage the worker's equipped items and identity.
 - **Main hand / Off hand** — weapon or tool the worker carries.
 - **Order 1 / Order 2** — Work Order Scroll slots. Drop a scroll here to queue a
   delivery route for the worker.
+- **Bed Token** — place a stamped Bed Token here to assign the worker a specific bed
+  to sleep in each night. Leave empty and the worker will find the nearest bed, shelter
+  near a door, or snore in place.
 - **Name & Skin** fields — rename the worker and set a custom player-skin URL
   (employer only). Changes apply immediately via the *Apply* button.
-- **Employer** label — shows who claimed the worker. An unclaimed worker can be
-  taken by the first player to interact.
+- **Employer** label — shows who claimed the worker (top-right corner of the tab).
+  An unclaimed worker can be taken by the first player to interact.
 
 #### Orders tab
 
@@ -188,6 +205,10 @@ status line reads **"Kit ready — activates on close"**. Close the screen to ac
 
 The worker's role activates automatically and persists across server restarts via NBT.
 To remove a role, open the screen, take the items back out of the kit slots, and close.
+
+The Role tab also has a **Sleep at Night** toggle. When enabled (the default), the worker
+stops work at dusk, sleeps, and resumes at dawn. Disable it to keep the worker active
+24 hours a day.
 
 #### Tasks tab
 
@@ -342,6 +363,10 @@ worker.startWorkOrder(order);
 | Craft Token face | `textures/item/location_token_craft_face.png` | 64×64 |
 | Deposit Token icon | `textures/item/location_token_deposit.png` | 32×32 |
 | Deposit Token face | `textures/item/location_token_deposit_face.png` | 64×64 |
+| Jobsite Token icon | `textures/item/location_token_jobsite.png` | 32×32 |
+| Jobsite Token face | `textures/item/location_token_jobsite_face.png` | 64×64 |
+| Bed Token icon | `textures/item/location_token_bed.png` | 32×32 |
+| Bed Token face | `textures/item/location_token_bed_face.png` | 64×64 |
 
 Token models use a 3D coin geometry (`models/item/location_token_base.json`): the
 `_face.png` texture is mapped to the front and back of the disc; the `_icon.png` is
@@ -350,6 +375,25 @@ used as the flat `layer0` fallback.
 ---
 
 ## Changelog
+
+### v1.3.5 (2026-06-19)
+- **UI — Equipment tab:** Employer label moved to the top-right corner; no longer overlaps the Bed Token slot.
+- **UI — Role tab:** ROLE KIT header no longer overlaps the tool/jobsite/deposit slot row; Sleep at Night button has added top padding to prevent overlap with the "Night behavior:" label.
+- **NPC sleeping — correct bed half:** workers now resolve the HEAD block of a bed before sleeping, regardless of which half was stored in the token or found by scanning. Works for all four bed orientations.
+- **NPC sleeping — headboard offset:** sleeping position shifted 0.25 blocks toward the foot of the bed so the worker is not pressed against the headboard.
+- **NPC wake — pose reset:** SLEEPING pose is unconditionally cleared at dawn, preventing workers from moving around in the lying-down position after waking.
+- **Bed Token recipe:** Gold Ingot + Feather (shapeless).
+
+### v1.3.4 (2026-06-13)
+- **Night behavior:** workers sleep at night by default. At dusk they navigate to an assigned bed (via Bed Token in the Equipment tab), the nearest unoccupied bed within 16 blocks, or shelter near a door; if no shelter is found they snore in place. At dawn they wake, stand up, and resume their role.
+- **Bed Token:** new light-blue Location Token that records a bed position. Place a stamped Bed Token in the worker's Equipment tab to give them a personal sleeping spot.
+- **`ignoreDark` toggle (Sleep at Night button):** disabling it in the Role tab keeps the worker active around the clock.
+
+### v1.3.3 (2026-06-13)
+- **Shepherd role:** workers equipped with shears, a Jobsite Token (pen centre), and a Deposit Token (wool chest) operate as shepherds — open the pen gate, shear all adult unsheared sheep within 24 blocks, deposit wool at the chest, and repeat.
+- **WAITING phase:** all role brains (Farmer, Shepherd) have an explicit idle-wait state. Workers pause up to ~30 s for crops to mature or sheep to regrow before rescanning, instead of busy-looping.
+- **NPC chest approach:** workers now navigate to the side of a deposit chest rather than on top of it.
+- **Gate exit fix:** shepherd gate open/close logic corrected so the gate is properly closed when the shepherd exits the pen.
 
 ### v1.3.2 (2026-06-11)
 - **Cargo tab polish:** box extended to fill the panel area (text no longer overflows the bottom),
