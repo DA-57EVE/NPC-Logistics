@@ -2,7 +2,9 @@
   "required": true,
   "package": "com.npclogistics.mixin",
   "compatibilityLevel": "JAVA_17",
-  "mixins": [],
+  "mixins": [
+    "MobEntityMixin"
+  ],
   "client": [],
   "injectors": {
     "defaultRequire": 1

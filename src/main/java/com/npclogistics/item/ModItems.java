@@ -68,6 +68,13 @@ public class ModItems {
             new SpawnEggItem(ModEntities.LOGISTICS_WORKER, 0x3D6E8C, 0xE8C040, new FabricItemSettings())
     );
 
+    /** Gold tag stamped with a pen position, then right-clicked on animals to claim them. */
+    public static final LivestockTagItem LIVESTOCK_TAG = Registry.register(
+            Registries.ITEM,
+            new Identifier(NPClogistics.MOD_ID, "livestock_tag"),
+            new LivestockTagItem(new FabricItemSettings().maxCount(64))
+    );
+
     public static void register() {
         NPClogistics.LOGGER.info("Registering mod items...");
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
@@ -79,6 +86,7 @@ public class ModItems {
             entries.add(LOCATION_TOKEN_BED);
             entries.add(WORK_GOGGLES);
             entries.add(LOGISTICS_WORKER_SPAWN_EGG);
+            entries.add(LIVESTOCK_TAG);
         });
     }
 }

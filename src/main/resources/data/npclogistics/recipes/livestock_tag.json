@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "minecraft:string"},
+    {"item": "minecraft:gold_ingot"}
+  ],
+  "result": {
+    "item": "npclogistics:livestock_tag",
+    "count": 4
+  }
+}

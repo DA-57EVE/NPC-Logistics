@@ -8,6 +8,7 @@
   "item.npclogistics.location_token_bed": "Bed Token",
   "item.npclogistics.work_goggles": "Work Goggles",
   "item.npclogistics.logistics_worker_spawn_egg": "Logistics Worker Spawn Egg",
+  "item.npclogistics.livestock_tag": "Livestock Tag",
   "screen.npclogistics.work_order": "Work Order Editor",
   "npclogistics.command.workorder": "Work Order Commands"
 }

@@ -2,7 +2,9 @@ package com.npclogistics;
 
 import com.npclogistics.command.WorkOrderCommand;
 import com.npclogistics.data.WorkOrder.StopAction;
+import com.npclogistics.entity.LivestockTaggable;
 import com.npclogistics.entity.ModEntities;
+import com.npclogistics.item.LivestockTagItem;
 import com.npclogistics.item.LocationTokenItem;
 import com.npclogistics.item.ModItems;
 import com.npclogistics.item.WorkOrderScrollItem;
@@ -10,12 +12,17 @@ import com.npclogistics.network.ModNetworking;
 import com.npclogistics.screen.ModScreenHandlers;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
+import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.block.Blocks;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Formatting;
@@ -103,6 +110,74 @@ public class NPClogistics implements ModInitializer {
                 sp.networkHandler.sendPacket(new ScreenHandlerSlotUpdateS2CPacket(-2, 0, slot, stack));
             }
             return ActionResult.SUCCESS;
+        });
+
+        // Livestock Tag: right-click any non-air block to stamp the pen position into the tag.
+        // Intercepts before containers open so stamping a chest doesn't also open it.
+        UseBlockCallback.EVENT.register((player, world, hand, hitResult) -> {
+            if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
+            ItemStack stack = player.getStackInHand(hand);
+            if (!(stack.getItem() instanceof LivestockTagItem)) return ActionResult.PASS;
+
+            BlockPos pos = hitResult.getBlockPos();
+            if (world.getBlockState(pos).isAir()) return ActionResult.PASS;
+
+            if (world.isClient) return ActionResult.SUCCESS;
+
+            LivestockTagItem.setPos(stack, pos);
+            player.sendMessage(Text.literal("Pen set to " + pos.toShortString()).formatted(Formatting.AQUA), true);
+            if (player instanceof ServerPlayerEntity sp) {
+                int slot = sp.getInventory().selectedSlot;
+                sp.networkHandler.sendPacket(new ScreenHandlerSlotUpdateS2CPacket(-2, 0, slot, stack));
+            }
+            return ActionResult.SUCCESS;
+        });
+
+        // Livestock Tag: right-click an animal with a stamped tag to claim it to that pen.
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
+            ItemStack stack = player.getStackInHand(hand);
+            if (!(stack.getItem() instanceof LivestockTagItem)) return ActionResult.PASS;
+            if (!(entity instanceof AnimalEntity)) return ActionResult.PASS;
+
+            if (world.isClient) return ActionResult.SUCCESS;
+
+            if (!LivestockTagItem.hasPos(stack)) {
+                player.sendMessage(
+                        Text.literal("Right-click a block first to set the pen location.").formatted(Formatting.RED),
+                        true);
+                return ActionResult.FAIL;
+            }
+
+            BlockPos jobsite = LivestockTagItem.getPos(stack);
+            ((LivestockTaggable) entity).npclogistics_setTagged(true, jobsite);
+            player.sendMessage(
+                    Text.literal(entity.getName().getString() + " tagged to pen at " + jobsite.toShortString())
+                            .formatted(Formatting.GREEN),
+                    true);
+
+            if (!player.isCreative()) stack.decrement(1);
+            return ActionResult.SUCCESS;
+        });
+
+        // Every 5 seconds (100 ticks): nudge tagged animals that have strayed >32 blocks back toward their jobsite.
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (server.getTicks() % 100 != 0) return;
+            for (ServerWorld world : server.getWorlds()) {
+                for (net.minecraft.entity.Entity e : world.iterateEntities()) {
+                    if (!(e instanceof MobEntity mob)) continue;
+                    if (!(mob instanceof LivestockTaggable taggable)) continue;
+                    if (!taggable.npclogistics_isTagged()) continue;
+                    BlockPos jobsite = taggable.npclogistics_getJobsite();
+                    if (jobsite == null) continue;
+                    double dx = mob.getX() - (jobsite.getX() + 0.5);
+                    double dz = mob.getZ() - (jobsite.getZ() + 0.5);
+                    if (dx * dx + dz * dz > 32.0 * 32.0) {
+                        mob.getNavigation().startMovingTo(
+                                jobsite.getX() + 0.5, jobsite.getY(), jobsite.getZ() + 0.5, 0.7);
+                    }
+                }
+            }
         });
 
         LOGGER.info("NPClogistics initialized.");

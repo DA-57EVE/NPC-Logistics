@@ -1,12 +1,14 @@
 package com.npclogistics.ai;
 
 import com.npclogistics.NPClogistics;
+import com.npclogistics.entity.LivestockTaggable;
 import com.npclogistics.entity.LogisticsWorkerEntity;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.FenceGateBlock;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
@@ -58,6 +60,7 @@ public class ShepherdBrain {
     private BlockPos    targetItemPos      = null;
     private int         timer              = 0;
     private boolean     isInsidePen        = false;
+    private boolean     initialTagDone     = false;
 
     // shared gate state for ENTERING / EXITING
     private BlockPos    managedGatePos     = null;
@@ -74,6 +77,11 @@ public class ShepherdBrain {
         BlockPos jobsite = worker.getJobsitePos();
         BlockPos deposit = worker.getDepositPos();
         if (jobsite == null || deposit == null) return;
+
+        if (!initialTagDone) {
+            initialTagDone = true;
+            tagNearbyAnimals(world, jobsite);
+        }
 
         ItemStack roleTool = worker.getRoleTool();
         if (!roleTool.isEmpty()) {
@@ -432,6 +440,8 @@ public class ShepherdBrain {
         if (--timer > 0) return;
         timer = WAIT_INTERVAL;
 
+        tagNearbyAnimals(world, jobsite);
+
         Box scanBox = new Box(
                 jobsite.getX() - SCAN_RADIUS, jobsite.getY() - 4, jobsite.getZ() - SCAN_RADIUS,
                 jobsite.getX() + SCAN_RADIUS, jobsite.getY() + 4, jobsite.getZ() + SCAN_RADIUS);
@@ -454,6 +464,26 @@ public class ShepherdBrain {
         } else {
             NPClogistics.LOGGER.info("{} waiting: no sheep found", worker.getName().getString());
         }
+    }
+
+    // ── Livestock tagging ─────────────────────────────────────────────────────
+
+    private void tagNearbyAnimals(ServerWorld world, BlockPos jobsite) {
+        Box scanBox = new Box(
+                jobsite.getX() - SCAN_RADIUS, jobsite.getY() - 4, jobsite.getZ() - SCAN_RADIUS,
+                jobsite.getX() + SCAN_RADIUS, jobsite.getY() + 4, jobsite.getZ() + SCAN_RADIUS);
+        List<AnimalEntity> animals = world.getEntitiesByClass(AnimalEntity.class, scanBox, e -> true);
+        int count = 0;
+        for (AnimalEntity animal : animals) {
+            if (!(animal instanceof LivestockTaggable taggable)) continue;
+            if (!taggable.npclogistics_isTagged()) {
+                taggable.npclogistics_setTagged(true, jobsite);
+                count++;
+            }
+        }
+        if (count > 0)
+            NPClogistics.LOGGER.info("{} shepherd tagged {} animals",
+                    worker.getName().getString(), count);
     }
 
     // ── Gate helpers ─────────────────────────────────────────────────────────
