@@ -29,7 +29,7 @@ only the Gradle build toolchain needs a JDK 21 present.
 ```bash
 # Gradle must run on a JDK 21 (Loom 1.13 requirement)
 JAVA_HOME=/path/to/jdk-21 ./gradlew build
-# Output: build/libs/npclogistics-1.1.2.jar
+# Output: build/libs/npclogistics-<version>.jar
 ```
 
 Run the dev client with `./gradlew runClient`.
@@ -96,8 +96,8 @@ Each token records a block position when right-clicked on a container, workstati
 | **Collect Token** | Blue | Marks the chest/barrel to collect raw materials from |
 | **Craft Token** | Amber | Marks the crafting station (crafting table, furnace, etc.) |
 | **Deposit Token** | Green | Marks the chest/barrel to deposit finished items into |
-| **Jobsite Token** | Purple | Centre of a role worker's active job area (farm, pen, etc.) |
-| **Bed Token** | Light blue | Bed the worker sleeps in at night |
+| **Jobsite Token** | Red | Centre of a role worker's active job area (farm, pen, etc.) |
+| **Bed Token** | White | Bed the worker sleeps in at night |
 
 Tokens are obtained from the creative *Tools & Utilities* tab or crafted in survival.
 Right-click a block to record its position into the token; the tooltip shows the stored
@@ -105,8 +105,8 @@ coordinates.
 
 #### Crafting recipes (shapeless)
 
-| Token | Ingredients |
-|-------|-------------|
+| Item | Ingredients |
+|------|-------------|
 | Work Order Scroll | Paper + Paper + Feather + Ink Sac |
 | Collect Token | Gold Ingot + Lapis Lazuli |
 | Craft Token | Gold Ingot + Blaze Powder |
@@ -114,6 +114,24 @@ coordinates.
 | Jobsite Token | Gold Ingot + Compass |
 | Bed Token | Gold Ingot + Feather |
 | Work Goggles | 2× Glass Pane + Iron Ingot + Gold Ingot |
+| Logistics Worker Spawn Egg | Egg + Emerald + Iron Ingot |
+
+---
+
+## Obtaining a Logistics Worker
+
+### Survival — Spawn Egg
+
+Craft a **Logistics Worker Spawn Egg** (shapeless: Egg + Emerald + Iron Ingot) and
+right-click any solid surface to spawn a worker at that location.
+The egg is also available in the creative *Tools & Utilities* tab.
+
+### Creative / Admin — Command
+
+```
+/workorder spawn          # spawns a worker at your feet
+/workorder spawn <x y z>  # spawns a worker at the given coordinates
+```
 
 ---
 
@@ -375,6 +393,11 @@ used as the flat `layer0` fallback.
 ---
 
 ## Changelog
+
+### v1.3.7 (2026-06-19)
+- **Logistics Worker Spawn Egg:** workers can now be spawned in survival via a craftable spawn egg (Egg + Emerald + Iron Ingot, shapeless). Also available in the creative Tools & Utilities tab.
+- **Jobsite Token recoloured:** token is now red (was purple).
+- **Bed Token recoloured:** token is now white/silver (was light blue).
 
 ### v1.3.6 (2026-06-19)
 - **Bug — Equipment tab tooltip:** hovering the Order 2 slot incorrectly showed "Bed Token" as the slot label; fixed by correcting the slot registration order so screen-slot index matches inventory index.
