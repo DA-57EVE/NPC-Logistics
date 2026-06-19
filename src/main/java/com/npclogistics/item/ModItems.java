@@ -1,10 +1,12 @@
 package com.npclogistics.item;
 
 import com.npclogistics.NPClogistics;
+import com.npclogistics.entity.ModEntities;
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
 import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemGroups;
+import net.minecraft.item.SpawnEggItem;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
@@ -59,6 +61,13 @@ public class ModItems {
             new WorkGogglesItem(new FabricItemSettings().maxCount(1))
     );
 
+    /** Spawn egg for the Logistics Worker NPC. Primary: steel blue, secondary: gold. */
+    public static final SpawnEggItem LOGISTICS_WORKER_SPAWN_EGG = Registry.register(
+            Registries.ITEM,
+            new Identifier(NPClogistics.MOD_ID, "logistics_worker_spawn_egg"),
+            new SpawnEggItem(ModEntities.LOGISTICS_WORKER, 0x3D6E8C, 0xE8C040, new FabricItemSettings())
+    );
+
     public static void register() {
         NPClogistics.LOGGER.info("Registering mod items...");
         ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> {
@@ -69,6 +78,7 @@ public class ModItems {
             entries.add(LOCATION_TOKEN_JOBSITE);
             entries.add(LOCATION_TOKEN_BED);
             entries.add(WORK_GOGGLES);
+            entries.add(LOGISTICS_WORKER_SPAWN_EGG);
         });
     }
 }

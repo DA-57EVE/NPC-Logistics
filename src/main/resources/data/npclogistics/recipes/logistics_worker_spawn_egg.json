@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {"item": "minecraft:egg"},
+    {"item": "minecraft:emerald"},
+    {"item": "minecraft:iron_ingot"}
+  ],
+  "result": {
+    "item": "npclogistics:logistics_worker_spawn_egg",
+    "count": 1
+  }
+}
