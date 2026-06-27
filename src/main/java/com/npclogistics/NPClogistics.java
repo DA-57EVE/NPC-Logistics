@@ -148,6 +148,18 @@ public class NPClogistics implements ModInitializer {
 
             if (world.isClient) return ActionResult.SUCCESS;
 
+            // Sneak + right-click: untag
+            if (player.isSneaking()) {
+                LivestockTaggable taggable = (LivestockTaggable) entity;
+                if (taggable.npclogistics_isTagged()) {
+                    taggable.npclogistics_setTagged(false, null);
+                    player.sendMessage(
+                            Text.literal(entity.getName().getString() + " untagged.").formatted(Formatting.YELLOW),
+                            true);
+                }
+                return ActionResult.SUCCESS;
+            }
+
             if (!LivestockTagItem.hasPos(stack)) {
                 player.sendMessage(
                         Text.literal("Right-click a block first to set the pen location.").formatted(Formatting.RED),
