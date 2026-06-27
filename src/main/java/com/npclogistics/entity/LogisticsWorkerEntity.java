@@ -3,6 +3,7 @@ package com.npclogistics.entity;
 import com.npclogistics.NPClogistics;
 import com.npclogistics.ai.CraftingTaskBrain;
 import com.npclogistics.ai.FarmerBrain;
+import com.npclogistics.ai.LogisticsNavigation;
 import com.npclogistics.ai.NightBrain;
 import com.npclogistics.ai.ShepherdBrain;
 import com.npclogistics.ai.WorkOrderBrain;
@@ -150,6 +151,11 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     //  Constructor & static attribute factory
     // -----------------------------------------------------------------------
 
+    @Override
+    protected net.minecraft.entity.ai.pathing.EntityNavigation createNavigation(World world) {
+        return new LogisticsNavigation(this, world);
+    }
+
     public LogisticsWorkerEntity(EntityType<? extends PathAwareEntity> type, World world) {
         super(type, world);
         workOrderBrain     = new WorkOrderBrain(this);
@@ -157,7 +163,6 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         shepherdBrain      = new ShepherdBrain(this);
         craftingTaskBrain  = new CraftingTaskBrain(this);
         nightBrain         = new NightBrain(this);
-        ((net.minecraft.entity.ai.pathing.MobNavigation) getNavigation()).setCanPathThroughDoors(true);
     }
 
     public static DefaultAttributeContainer.Builder createAttributes() {
