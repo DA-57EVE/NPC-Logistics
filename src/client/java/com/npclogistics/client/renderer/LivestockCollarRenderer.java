@@ -2,6 +2,8 @@ package com.npclogistics.client.renderer;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.npclogistics.entity.LivestockTaggable;
+import com.npclogistics.item.WorkGogglesItem;
+import net.minecraft.entity.EquipmentSlot;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
@@ -30,7 +32,8 @@ public class LivestockCollarRenderer {
 
     private static void render(WorldRenderContext context) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.world == null) return;
+        if (client.world == null || client.player == null) return;
+        if (!(client.player.getEquippedStack(EquipmentSlot.HEAD).getItem() instanceof WorkGogglesItem)) return;
 
         Vec3d camPos = context.camera().getPos();
         float tickDelta = context.tickDelta();
