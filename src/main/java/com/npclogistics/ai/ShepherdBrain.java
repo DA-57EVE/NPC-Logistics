@@ -8,7 +8,6 @@ import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.FenceGateBlock;
 import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.passive.AnimalEntity;
 import net.minecraft.entity.passive.SheepEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
@@ -45,7 +44,7 @@ public class ShepherdBrain {
     private static final double GATE_OPEN_DIST     = 1.5; // open gate when this close
     private static final double GATE_CLOSE_DIST    = 4.5; // auto-close gate once NPC is this far past it
     private static final double ENTRY_DIST         = 2.0; // "inside pen" threshold
-    private static final int    GATE_SEARCH_RADIUS = 8;
+    private static final int    GATE_SEARCH_RADIUS = 12;
 
     private enum Phase {
         SCANNING, ENTERING, EXITING,
@@ -189,10 +188,13 @@ public class ShepherdBrain {
         if (managedGatePos == null) {
             managedGatePos = findNearestGate(world, jobsite);
             if (managedGatePos == null) {
-                phase = Phase.SCANNING;
-                timer = SCAN_INTERVAL;
-                NPClogistics.LOGGER.warn("{} shepherd: no fence gate found near jobsite {}",
-                        worker.getName().getString(), jobsite);
+                // No gate — navigate directly to jobsite (open pen or gate removed)
+                if (worker.getNavigation().isIdle()) {
+                    NPClogistics.LOGGER.warn("{} shepherd: no gate found near {} — navigating directly",
+                            worker.getName().getString(), jobsite);
+                    worker.getNavigation().startMovingTo(
+                            jobsite.getX() + 0.5, jobsite.getY(), jobsite.getZ() + 0.5, NAV_SPEED);
+                }
                 return;
             }
             NPClogistics.LOGGER.info("{} shepherd entering pen (gate={})",
@@ -472,9 +474,9 @@ public class ShepherdBrain {
         Box scanBox = new Box(
                 jobsite.getX() - SCAN_RADIUS, jobsite.getY() - 4, jobsite.getZ() - SCAN_RADIUS,
                 jobsite.getX() + SCAN_RADIUS, jobsite.getY() + 4, jobsite.getZ() + SCAN_RADIUS);
-        List<AnimalEntity> animals = world.getEntitiesByClass(AnimalEntity.class, scanBox, e -> true);
+        List<SheepEntity> animals = world.getEntitiesByClass(SheepEntity.class, scanBox, e -> true);
         int count = 0;
-        for (AnimalEntity animal : animals) {
+        for (SheepEntity animal : animals) {
             if (!(animal instanceof LivestockTaggable taggable)) continue;
             if (!taggable.npclogistics_isTagged()) {
                 taggable.npclogistics_setTagged(true, jobsite);

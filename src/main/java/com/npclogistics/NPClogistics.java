@@ -17,6 +17,10 @@ import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.entity.passive.AnimalEntity;
+import net.minecraft.entity.passive.SheepEntity;
+import net.minecraft.entity.passive.CowEntity;
+import net.minecraft.entity.passive.PigEntity;
+import net.minecraft.entity.passive.ChickenEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.block.Blocks;
 import net.minecraft.inventory.Inventory;
@@ -138,7 +142,9 @@ public class NPClogistics implements ModInitializer {
             if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
             ItemStack stack = player.getStackInHand(hand);
             if (!(stack.getItem() instanceof LivestockTagItem)) return ActionResult.PASS;
-            if (!(entity instanceof AnimalEntity)) return ActionResult.PASS;
+            if (!(entity instanceof SheepEntity || entity instanceof CowEntity
+                    || entity instanceof PigEntity || entity instanceof ChickenEntity))
+                return ActionResult.PASS;
 
             if (world.isClient) return ActionResult.SUCCESS;
 
@@ -170,6 +176,7 @@ public class NPClogistics implements ModInitializer {
                     if (!taggable.npclogistics_isTagged()) continue;
                     BlockPos jobsite = taggable.npclogistics_getJobsite();
                     if (jobsite == null) continue;
+                    if (!mob.getNavigation().isIdle()) continue;
                     double dx = mob.getX() - (jobsite.getX() + 0.5);
                     double dz = mob.getZ() - (jobsite.getZ() + 0.5);
                     if (dx * dx + dz * dz > 32.0 * 32.0) {

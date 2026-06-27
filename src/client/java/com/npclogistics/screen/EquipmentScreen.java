@@ -209,7 +209,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
                     ignoreDark = !ignoreDark;
                     ClientNetworking.sendToggleIgnoreDark(handler.workerEntityId, ignoreDark);
                 })
-                .dimensions(x + 8, y + 103, 177, 14)
+                .dimensions(x + 8, y + 94, 177, 14)
                 .tooltip(Tooltip.of(
                         Text.literal("When ON, this NPC ignores night-time and keeps working")))
                 .build());
@@ -675,16 +675,13 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         ctx.drawText(textRenderer, statusText, 0, 0, statusColor, false);
         ctx.getMatrices().pop();
 
-        // Night behavior section
-        ctx.drawText(textRenderer, "Night behavior:", 10, 93, C_BED, false);
-
         // ignoreDark button overlay — draws on top of the invisible ButtonWidget
         int btnBg = ignoreDark
                 ? (ignoreDarkBtn.isHovered() ? 0xFF5577BB : 0xFF335599)
                 : (ignoreDarkBtn.isHovered() ? 0xFF444455 : 0xFF252530);
-        ctx.fill(8, 103, 8 + 177, 103 + 14, btnBg);
+        ctx.fill(8, 94, 8 + 177, 94 + 14, btnBg);
         String btnLabel = ignoreDark ? "Work Through Night: ON" : "Sleep at Night: ON";
-        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(btnLabel), 8 + 177 / 2, 106, 0xFFFFFF);
+        ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(btnLabel), 8 + 177 / 2, 97, 0xFFFFFF);
     }
 
     private boolean isRoleKitFilled() {
