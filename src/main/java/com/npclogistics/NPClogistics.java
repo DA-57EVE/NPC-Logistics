@@ -166,7 +166,7 @@ public class NPClogistics implements ModInitializer {
             return ActionResult.SUCCESS;
         });
 
-        // Every 5 seconds (100 ticks): nudge tagged animals that have strayed >32 blocks back toward their jobsite.
+        // Every 5 seconds (100 ticks): nudge tagged animals that have strayed >20 blocks back toward their jobsite.
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (server.getTicks() % 100 != 0) return;
             for (ServerWorld world : server.getWorlds()) {
@@ -179,7 +179,7 @@ public class NPClogistics implements ModInitializer {
                     if (!mob.getNavigation().isIdle()) continue;
                     double dx = mob.getX() - (jobsite.getX() + 0.5);
                     double dz = mob.getZ() - (jobsite.getZ() + 0.5);
-                    if (dx * dx + dz * dz > 32.0 * 32.0) {
+                    if (dx * dx + dz * dz > 20.0 * 20.0) {
                         mob.getNavigation().startMovingTo(
                                 jobsite.getX() + 0.5, jobsite.getY(), jobsite.getZ() + 0.5, 0.7);
                     }
