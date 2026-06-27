@@ -1,5 +1,5 @@
 package com.npclogistics.data;
 
 public enum NpcRole {
-    FARMER, SHEPHERD
+    FARMER, SHEPHERD, DAIRY, CHICKEN
 }

@@ -19,7 +19,9 @@ public class RoleRegistry {
         ROLES.put(Items.DIAMOND_HOE,   NpcRole.FARMER);
         ROLES.put(Items.NETHERITE_HOE, NpcRole.FARMER);
 
-        ROLES.put(Items.SHEARS, NpcRole.SHEPHERD);
+        ROLES.put(Items.SHEARS,   NpcRole.SHEPHERD);
+        ROLES.put(Items.BUCKET,   NpcRole.DAIRY);
+        ROLES.put(Items.FEATHER,  NpcRole.CHICKEN);
     }
 
     /** Returns the {@link NpcRole} for the given tool stack, or {@code null} if unrecognised. */
