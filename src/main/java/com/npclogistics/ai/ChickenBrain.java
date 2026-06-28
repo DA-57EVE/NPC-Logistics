@@ -10,6 +10,7 @@ import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.passive.ChickenEntity;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.SimpleInventory;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.sound.SoundCategory;
@@ -31,14 +32,16 @@ public class ChickenBrain {
     private static final int    WAIT_INTERVAL = 300; // 15 s — eggs drop slowly
     private static final double NAV_SPEED     = 0.9;
 
-    private enum Phase { SCANNING, NAVIGATING_EGG, WORKING_PICKUP, DEPOSITING, WAITING }
+    private enum Phase { SCANNING, NAVIGATING_EGG, WORKING_PICKUP, DEPOSITING, WAITING, BREEDING }
 
     private final LogisticsWorkerEntity worker;
 
-    private Phase   phase          = Phase.SCANNING;
-    private BlockPos targetEggPos  = null;
-    private int     timer          = 0;
-    private boolean initialTagDone = false;
+    private Phase         phase          = Phase.SCANNING;
+    private BlockPos      targetEggPos   = null;
+    private int           timer          = 0;
+    private boolean       initialTagDone = false;
+    private ChickenEntity breedTarget    = null;
+    private int           breedNavTimer  = 0;
 
     public ChickenBrain(LogisticsWorkerEntity worker) { this.worker = worker; }
 
@@ -64,8 +67,9 @@ public class ChickenBrain {
             case SCANNING       -> tickScanning(world, jobsite, deposit);
             case NAVIGATING_EGG -> tickNavigatingEgg();
             case WORKING_PICKUP -> tickWorkingPickup(world);
-            case DEPOSITING     -> tickDepositing(world, deposit);
+            case DEPOSITING     -> tickDepositing(world, deposit, jobsite);
             case WAITING        -> tickWaiting(world, jobsite, deposit);
+            case BREEDING       -> tickBreeding(world, jobsite);
         }
     }
 
@@ -126,7 +130,7 @@ public class ChickenBrain {
 
     // ── DEPOSITING ────────────────────────────────────────────────────────────
 
-    private void tickDepositing(ServerWorld world, BlockPos depositPos) {
+    private void tickDepositing(ServerWorld world, BlockPos depositPos, BlockPos jobsite) {
         BlockPos approach = findApproachPos(world, depositPos, worker.getBlockPos());
         if (worker.getPos().distanceTo(approach.toCenterPos()) > ARRIVAL_DIST) {
             if (worker.getNavigation().isIdle())
@@ -152,8 +156,70 @@ public class ChickenBrain {
                     block == Blocks.BARREL ? SoundEvents.BLOCK_BARREL_CLOSE : SoundEvents.BLOCK_CHEST_CLOSE,
                     SoundCategory.BLOCKS, 0.4f, 1.0f);
             world.addSyncedBlockEvent(depositPos, block, 1, 0);
-            beginWaiting();
+            afterDeposit(world, depositPos, jobsite);
         }
+    }
+
+    private void afterDeposit(ServerWorld world, BlockPos depositPos, BlockPos jobsite) {
+        Inventory container = WorkOrderBrain.resolveInventory(world, depositPos);
+        if (container != null) {
+            boolean hasSeeds = false;
+            for (int j = 0; j < container.size(); j++) {
+                ItemStack slot = container.getStack(j);
+                if (!slot.isEmpty() && slot.getItem() == Items.WHEAT_SEEDS) { hasSeeds = true; break; }
+            }
+            if (hasSeeds) {
+                long breedable = world.getEntitiesByClass(ChickenEntity.class, scanBox(jobsite),
+                        c -> !c.isBaby() && !c.isInLove()).size();
+                if (breedable >= 2) {
+                    int taken = takeItemFromChest(world, depositPos, Items.WHEAT_SEEDS, (int) breedable);
+                    if (taken > 0) {
+                        NPClogistics.LOGGER.info("{} chicken-farmer: took {} seeds to breed {} chickens",
+                                worker.getName().getString(), taken, breedable);
+                        phase = Phase.BREEDING;
+                        breedTarget   = null;
+                        breedNavTimer = 0;
+                        return;
+                    }
+                }
+            }
+        }
+        beginWaiting();
+    }
+
+    private void tickBreeding(ServerWorld world, BlockPos jobsite) {
+        if (breedTarget != null && breedTarget.isAlive() && !breedTarget.isBaby() && !breedTarget.isInLove()) {
+            if (worker.distanceTo(breedTarget) <= ARRIVAL_DIST) {
+                removeOneFromInventory(Items.WHEAT_SEEDS);
+                breedTarget.lovePlayer(null);
+                NPClogistics.LOGGER.info("{} chicken-farmer bred chicken at {}",
+                        worker.getName().getString(), breedTarget.getBlockPos());
+                breedTarget   = null;
+                breedNavTimer = 0;
+                return;
+            }
+            if (++breedNavTimer <= 100) {
+                if (worker.getNavigation().isIdle())
+                    worker.getNavigation().startMovingTo(
+                            breedTarget.getX(), breedTarget.getY(), breedTarget.getZ(), NAV_SPEED);
+                return;
+            }
+            breedTarget   = null;
+            breedNavTimer = 0;
+        }
+
+        breedTarget   = null;
+        breedNavTimer = 0;
+
+        if (countInInventory(Items.WHEAT_SEEDS) == 0) { beginWaiting(); return; }
+
+        breedTarget = world.getEntitiesByClass(ChickenEntity.class, scanBox(jobsite),
+                        c -> !c.isBaby() && !c.isInLove())
+                .stream()
+                .min(Comparator.comparingDouble(c -> worker.distanceTo(c)))
+                .orElse(null);
+
+        if (breedTarget == null) beginWaiting();
     }
 
     // ── WAITING ───────────────────────────────────────────────────────────────
@@ -197,11 +263,12 @@ public class ChickenBrain {
     private void tagNearbyChickens(ServerWorld world, BlockPos jobsite) {
         List<ChickenEntity> chickens = world.getEntitiesByClass(ChickenEntity.class, scanBox(jobsite), e -> true);
         int count = 0;
+        int myColor = LivestockTaggable.colorForOwner(worker.getUuid());
         for (ChickenEntity chicken : chickens) {
             if (!(chicken instanceof LivestockTaggable t)) continue;
-            if (!t.npclogistics_isTagged()) {
+            if (!t.npclogistics_isTagged() || t.npclogistics_getOwnerColor() != myColor) {
                 t.npclogistics_setTagged(true, jobsite);
-                t.npclogistics_setOwnerColor(LivestockTaggable.colorForOwner(worker.getUuid()));
+                t.npclogistics_setOwnerColor(myColor);
                 count++;
             }
         }
@@ -305,5 +372,50 @@ public class ChickenBrain {
         SimpleInventory inv = worker.getWorkerInventory();
         for (int i = 0; i < inv.size(); i++) if (!inv.getStack(i).isEmpty()) return false;
         return true;
+    }
+
+    private int countInInventory(Item item) {
+        SimpleInventory inv = worker.getWorkerInventory();
+        int count = 0;
+        for (int i = 0; i < inv.size(); i++) {
+            ItemStack s = inv.getStack(i);
+            if (s.getItem() == item) count += s.getCount();
+        }
+        return count;
+    }
+
+    private boolean removeOneFromInventory(Item item) {
+        SimpleInventory inv = worker.getWorkerInventory();
+        for (int i = 0; i < inv.size(); i++) {
+            ItemStack s = inv.getStack(i);
+            if (s.getItem() != item) continue;
+            s.decrement(1);
+            if (s.isEmpty()) inv.setStack(i, ItemStack.EMPTY);
+            inv.markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    private int takeItemFromChest(ServerWorld world, BlockPos depositPos, Item item, int maxAmount) {
+        Inventory container = WorkOrderBrain.resolveInventory(world, depositPos);
+        if (container == null) return 0;
+        SimpleInventory npcInv = worker.getWorkerInventory();
+        int taken = 0;
+        for (int j = 0; j < container.size() && taken < maxAmount; j++) {
+            ItemStack slot = container.getStack(j);
+            if (slot.isEmpty() || slot.getItem() != item) continue;
+            int take = Math.min(slot.getCount(), maxAmount - taken);
+            ItemStack toAdd    = new ItemStack(item, take);
+            ItemStack leftover = worker.addToWorkerInventory(toAdd);
+            int actual = take - (leftover.isEmpty() ? 0 : leftover.getCount());
+            slot.decrement(actual);
+            if (slot.isEmpty()) container.setStack(j, ItemStack.EMPTY);
+            taken += actual;
+            if (!leftover.isEmpty()) break;
+        }
+        container.markDirty();
+        npcInv.markDirty();
+        return taken;
     }
 }

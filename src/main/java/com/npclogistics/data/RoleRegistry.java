@@ -22,6 +22,15 @@ public class RoleRegistry {
         ROLES.put(Items.SHEARS,   NpcRole.SHEPHERD);
         ROLES.put(Items.BUCKET,   NpcRole.DAIRY);
         ROLES.put(Items.FEATHER,  NpcRole.CHICKEN);
+
+        ROLES.put(Items.WOODEN_SWORD,    NpcRole.BUTCHER);
+        ROLES.put(Items.STONE_SWORD,     NpcRole.BUTCHER);
+        ROLES.put(Items.IRON_SWORD,      NpcRole.BUTCHER);
+        ROLES.put(Items.GOLDEN_SWORD,    NpcRole.BUTCHER);
+        ROLES.put(Items.DIAMOND_SWORD,   NpcRole.BUTCHER);
+        ROLES.put(Items.NETHERITE_SWORD, NpcRole.BUTCHER);
+
+        ROLES.put(Items.LEAD, NpcRole.BREEDER);
     }
 
     /** Returns the {@link NpcRole} for the given tool stack, or {@code null} if unrecognised. */

@@ -113,6 +113,9 @@ public class DairyBrain {
 
         if (taken > 0) {
             NPClogistics.LOGGER.info("{} dairy collected {} empty buckets", worker.getName().getString(), taken);
+            int wheat = takeItemFromChest(world, depositPos, Items.WHEAT, 16);
+            if (wheat > 0)
+                NPClogistics.LOGGER.info("{} dairy: also took {} wheat for breeding", worker.getName().getString(), wheat);
             phase = Phase.SCANNING;
             timer = 0;
         } else {
@@ -219,6 +222,12 @@ public class DairyBrain {
             NPClogistics.LOGGER.info("{} milked cow at {}", worker.getName().getString(), targetCow.getBlockPos());
         }
 
+        // Breed while next to the cow if we have wheat and it's ready
+        if (!targetCow.isBaby() && !targetCow.isInLove() && removeOneFromInventory(Items.WHEAT)) {
+            targetCow.lovePlayer(null);
+            NPClogistics.LOGGER.info("{} dairy bred cow at {}", worker.getName().getString(), targetCow.getBlockPos());
+        }
+
         targetCow = null;
         phase = Phase.SCANNING;
         timer = 5;
@@ -267,7 +276,6 @@ public class DairyBrain {
             if (s.isEmpty()) continue;
             boolean isMilk   = s.getItem() == Items.MILK_BUCKET;
             boolean isEmpty  = s.getItem() == Items.BUCKET;
-            if (!isMilk && !isEmpty) continue;
             for (int j = 0; j < container.size(); j++) {
                 ItemStack slot = container.getStack(j);
                 if (slot.isEmpty()) {
@@ -310,6 +318,8 @@ public class DairyBrain {
 
         milkedThisRound.clear();
         tagNearbyCows(world, jobsite);
+        if (countInInventory(Items.WHEAT) == 0)
+            takeItemFromChest(world, depositPos, Items.WHEAT, 16);
         phase = Phase.COLLECTING;
         timer = 0;
     }
@@ -319,11 +329,12 @@ public class DairyBrain {
     private void tagNearbyCows(ServerWorld world, BlockPos jobsite) {
         List<CowEntity> cows = world.getEntitiesByClass(CowEntity.class, scanBox(jobsite), e -> true);
         int count = 0;
+        int myColor = LivestockTaggable.colorForOwner(worker.getUuid());
         for (CowEntity cow : cows) {
             if (!(cow instanceof LivestockTaggable t)) continue;
-            if (!t.npclogistics_isTagged()) {
+            if (!t.npclogistics_isTagged() || t.npclogistics_getOwnerColor() != myColor) {
                 t.npclogistics_setTagged(true, jobsite);
-                t.npclogistics_setOwnerColor(LivestockTaggable.colorForOwner(worker.getUuid()));
+                t.npclogistics_setOwnerColor(myColor);
                 count++;
             }
         }
@@ -341,6 +352,28 @@ public class DairyBrain {
             if (s.getItem() == item) count += s.getCount();
         }
         return count;
+    }
+
+    private int takeItemFromChest(ServerWorld world, BlockPos depositPos, net.minecraft.item.Item item, int maxAmount) {
+        Inventory container = WorkOrderBrain.resolveInventory(world, depositPos);
+        if (container == null) return 0;
+        SimpleInventory npcInv = worker.getWorkerInventory();
+        int taken = 0;
+        for (int j = 0; j < container.size() && taken < maxAmount; j++) {
+            ItemStack slot = container.getStack(j);
+            if (slot.isEmpty() || slot.getItem() != item) continue;
+            int take = Math.min(slot.getCount(), maxAmount - taken);
+            ItemStack toAdd    = new ItemStack(item, take);
+            ItemStack leftover = worker.addToWorkerInventory(toAdd);
+            int actual = take - (leftover.isEmpty() ? 0 : leftover.getCount());
+            slot.decrement(actual);
+            if (slot.isEmpty()) container.setStack(j, ItemStack.EMPTY);
+            taken += actual;
+            if (!leftover.isEmpty()) break;
+        }
+        container.markDirty();
+        npcInv.markDirty();
+        return taken;
     }
 
     private boolean removeOneFromInventory(net.minecraft.item.Item item) {

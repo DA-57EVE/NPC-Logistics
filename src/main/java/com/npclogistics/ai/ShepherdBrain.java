@@ -60,6 +60,7 @@ public class ShepherdBrain {
     private int         timer              = 0;
     private boolean     isInsidePen        = false;
     private boolean     initialTagDone     = false;
+    private boolean     breedMode          = false;
 
     // shared gate state for ENTERING / EXITING
     private BlockPos    managedGatePos     = null;
@@ -145,7 +146,23 @@ public class ShepherdBrain {
             if (phase == Phase.NAVIGATING_SHEEP) { worker.getNavigation().stop(); return; }
         }
 
-        // All sheep shorn — exit pen whether or not we have wool (deposit or just wait)
+        // All sheep shorn — check for breedable pairs before exiting
+        if (countInInventory(Items.WHEAT) > 0) {
+            List<SheepEntity> breedable = world.getEntitiesByClass(SheepEntity.class, scanBox,
+                    s -> !s.isBaby() && !s.isInLove());
+            if (!breedable.isEmpty()) {
+                breedable.stream()
+                        .min(Comparator.comparingDouble(s -> worker.getPos().distanceTo(s.getPos())))
+                        .ifPresent(sheep -> {
+                            targetSheep = sheep;
+                            breedMode   = true;
+                            navTimer    = 0;
+                            phase = Phase.NAVIGATING_SHEEP;
+                        });
+                if (phase == Phase.NAVIGATING_SHEEP) { worker.getNavigation().stop(); return; }
+            }
+        }
+
         beginExit();
     }
 
@@ -327,8 +344,11 @@ public class ShepherdBrain {
     // ── NAVIGATING ────────────────────────────────────────────────────────────
 
     private void tickNavigatingSheep() {
-        if (targetSheep == null || !targetSheep.isAlive() || !targetSheep.isShearable()) {
-            phase = Phase.SCANNING; timer = 0; navTimer = 0; return;
+        boolean invalid = targetSheep == null || !targetSheep.isAlive()
+                || (!breedMode && !targetSheep.isShearable())
+                || (breedMode && (targetSheep.isBaby() || targetSheep.isInLove()));
+        if (invalid) {
+            breedMode = false; phase = Phase.SCANNING; timer = 0; navTimer = 0; return;
         }
         if (worker.distanceTo(targetSheep) <= ARRIVAL_DIST) {
             phase = Phase.WORKING_SHEAR;
@@ -340,6 +360,7 @@ public class ShepherdBrain {
             NPClogistics.LOGGER.info("{} shepherd: can't reach sheep — rescanning",
                     worker.getName().getString());
             targetSheep = null;
+            breedMode   = false;
             phase = Phase.SCANNING;
             timer = 0;
             navTimer = 0;
@@ -369,10 +390,19 @@ public class ShepherdBrain {
 
     private void tickWorkingShear(ServerWorld world) {
         if (--timer > 0) return;
-        if (targetSheep == null || !targetSheep.isAlive() || !targetSheep.isShearable()) {
-            phase = Phase.SCANNING; timer = 0; return;
+        if (targetSheep == null || !targetSheep.isAlive()) {
+            breedMode = false; phase = Phase.SCANNING; timer = 0; return;
         }
-        shearSheep(world, targetSheep);
+        if (breedMode) {
+            if (!targetSheep.isBaby() && !targetSheep.isInLove() && removeOneFromInventory(Items.WHEAT)) {
+                targetSheep.lovePlayer(null);
+                NPClogistics.LOGGER.info("{} shepherd bred sheep at {}",
+                        worker.getName().getString(), targetSheep.getBlockPos());
+            }
+            breedMode = false;
+        } else if (targetSheep.isShearable()) {
+            shearSheep(world, targetSheep);
+        }
         targetSheep = null;
         phase = Phase.SCANNING;
         timer = 5;
@@ -449,7 +479,17 @@ public class ShepherdBrain {
                 jobsite.getX() + SCAN_RADIUS, jobsite.getY() + 4, jobsite.getZ() + SCAN_RADIUS);
 
         List<SheepEntity> unsheared = world.getEntitiesByClass(SheepEntity.class, scanBox, SheepEntity::isShearable);
-        if (!unsheared.isEmpty()) {
+        List<SheepEntity> breedable = world.getEntitiesByClass(SheepEntity.class, scanBox,
+                s -> !s.isBaby() && !s.isInLove());
+        boolean shouldEnter = !unsheared.isEmpty() || (!breedable.isEmpty() && countInInventory(Items.WHEAT) == 0
+                && chestHasItem(world, depositPos, Items.WHEAT));
+        if (shouldEnter) {
+            if (countInInventory(Items.WHEAT) == 0) {
+                int taken = takeItemFromChest(world, depositPos, Items.WHEAT, Math.max(breedable.size(), 1));
+                if (taken > 0)
+                    NPClogistics.LOGGER.info("{} shepherd: took {} wheat for breeding",
+                            worker.getName().getString(), taken);
+            }
             isInsidePen   = false;
             managedGatePos = null;
             gateIsOpen    = false;
@@ -476,11 +516,12 @@ public class ShepherdBrain {
                 jobsite.getX() + SCAN_RADIUS, jobsite.getY() + 4, jobsite.getZ() + SCAN_RADIUS);
         List<SheepEntity> animals = world.getEntitiesByClass(SheepEntity.class, scanBox, e -> true);
         int count = 0;
+        int myColor = LivestockTaggable.colorForOwner(worker.getUuid());
         for (SheepEntity animal : animals) {
             if (!(animal instanceof LivestockTaggable taggable)) continue;
-            if (!taggable.npclogistics_isTagged()) {
+            if (!taggable.npclogistics_isTagged() || taggable.npclogistics_getOwnerColor() != myColor) {
                 taggable.npclogistics_setTagged(true, jobsite);
-                taggable.npclogistics_setOwnerColor(LivestockTaggable.colorForOwner(worker.getUuid()));
+                taggable.npclogistics_setOwnerColor(myColor);
                 count++;
             }
         }
@@ -645,6 +686,61 @@ public class ShepherdBrain {
                 net.fabricmc.fabric.api.networking.v1.PlayerLookup.tracking(worker)) {
             p.networkHandler.sendPacket(packet);
         }
+    }
+
+    private int countInInventory(net.minecraft.item.Item item) {
+        SimpleInventory inv = worker.getWorkerInventory();
+        int count = 0;
+        for (int i = 0; i < inv.size(); i++) {
+            ItemStack s = inv.getStack(i);
+            if (s.getItem() == item) count += s.getCount();
+        }
+        return count;
+    }
+
+    private boolean removeOneFromInventory(net.minecraft.item.Item item) {
+        SimpleInventory inv = worker.getWorkerInventory();
+        for (int i = 0; i < inv.size(); i++) {
+            ItemStack s = inv.getStack(i);
+            if (s.getItem() != item) continue;
+            s.decrement(1);
+            if (s.isEmpty()) inv.setStack(i, ItemStack.EMPTY);
+            inv.markDirty();
+            return true;
+        }
+        return false;
+    }
+
+    private int takeItemFromChest(ServerWorld world, BlockPos depositPos, net.minecraft.item.Item item, int maxAmount) {
+        Inventory container = WorkOrderBrain.resolveInventory(world, depositPos);
+        if (container == null) return 0;
+        SimpleInventory npcInv = worker.getWorkerInventory();
+        int taken = 0;
+        for (int j = 0; j < container.size() && taken < maxAmount; j++) {
+            ItemStack slot = container.getStack(j);
+            if (slot.isEmpty() || slot.getItem() != item) continue;
+            int take = Math.min(slot.getCount(), maxAmount - taken);
+            ItemStack toAdd    = new ItemStack(item, take);
+            ItemStack leftover = worker.addToWorkerInventory(toAdd);
+            int actual = take - (leftover.isEmpty() ? 0 : leftover.getCount());
+            slot.decrement(actual);
+            if (slot.isEmpty()) container.setStack(j, ItemStack.EMPTY);
+            taken += actual;
+            if (!leftover.isEmpty()) break;
+        }
+        container.markDirty();
+        npcInv.markDirty();
+        return taken;
+    }
+
+    private boolean chestHasItem(ServerWorld world, BlockPos depositPos, net.minecraft.item.Item item) {
+        Inventory container = WorkOrderBrain.resolveInventory(world, depositPos);
+        if (container == null) return false;
+        for (int j = 0; j < container.size(); j++) {
+            ItemStack slot = container.getStack(j);
+            if (!slot.isEmpty() && slot.getItem() == item) return true;
+        }
+        return false;
     }
 
     private boolean isInventoryFull() {
