@@ -342,7 +342,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
                         return;
                     } else if (off == EquipmentScreenHandler.SLOT_ROLE_JOBSITE) {
                         context.drawTooltip(textRenderer, List.of(
-                                Text.literal("Jobsite Token").formatted(Formatting.AQUA),
+                                Text.literal("Jobsite Token").formatted(Formatting.RED),
                                 Text.literal("Set a Jobsite Token to the farm centre").formatted(Formatting.DARK_GRAY)
                         ), mouseX, mouseY);
                         return;
@@ -510,7 +510,7 @@ public class EquipmentScreen extends HandledScreen<EquipmentScreenHandler> {
         ctx.fill(x + 7, y + 16, x + 193, y + SEP1_Y, 0xFF0A1520);
         border(ctx, x + 7, y + 16, x + 193, y + SEP1_Y);
         slotBg(ctx, x + 8, y + EquipmentScreenHandler.ROLE_TOOL_Y);
-        slotBgTinted(ctx, x + 8, y + EquipmentScreenHandler.ROLE_JOBSITE_Y, 0xFF446688);
+        slotBgTinted(ctx, x + 8, y + EquipmentScreenHandler.ROLE_JOBSITE_Y, 0xFF882222);
         slotBgTinted(ctx, x + 8, y + EquipmentScreenHandler.ROLE_DEPOSIT_Y, 0xFF226633);
         // Night divider
         ctx.fill(x + 8, y + 83, x + 192, y + 84, C_DIVIDER);
