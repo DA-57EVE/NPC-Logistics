@@ -4,8 +4,9 @@
 
 A Minecraft Fabric mod that adds **Logistics Worker NPCs** capable of executing
 item-collection and delivery routes across chests and barrels, and **Role-based autonomous
-workers** that perform ongoing jobs — including a **Farmer**, **Shepherd**, **Dairy**, and
-**Chicken** role, each running independently with no further player input after setup.
+workers** that perform ongoing jobs — including a **Farmer**, **Shepherd**, **Dairy**,
+**Chicken**, **Butcher**, and **Breeder** role, each running independently with no further
+player input after setup.
 
 ---
 
@@ -45,9 +46,11 @@ src/
 │   ├── ai/
 │   │   ├── WorkOrderBrain.java         # Tick-based route execution AI
 │   │   ├── FarmerBrain.java            # Farmer role state machine
-│   │   ├── ShepherdBrain.java          # Shepherd role state machine
-│   │   ├── DairyBrain.java             # Dairy role state machine
-│   │   ├── ChickenBrain.java           # Chicken role state machine
+│   │   ├── ShepherdBrain.java          # Shepherd role state machine (+ breeding)
+│   │   ├── DairyBrain.java             # Dairy role state machine (+ breeding)
+│   │   ├── ChickenBrain.java           # Chicken role state machine (+ breeding)
+│   │   ├── ButcherBrain.java           # Butcher role state machine
+│   │   ├── BreederBrain.java           # Breeder role state machine
 │   │   └── NightBrain.java             # Night/sleep behaviour
 │   ├── command/
 │   │   └── WorkOrderCommand.java       # /workorder admin commands
@@ -249,8 +252,10 @@ Assign an autonomous **Role** to the worker using a three-slot kit:
 | **Tool** | Shears | Shepherd |
 | **Tool** | Bucket | Dairy |
 | **Tool** | Feather | Chicken |
-| **Jobsite Token** | Stamped Location Token | Centre of the work area |
-| **Deposit Token** | Stamped Location Token | Chest/barrel for produce/output |
+| **Tool** | Sword (any tier) | Butcher |
+| **Tool** | Lead | Breeder |
+| **Jobsite Token** | Stamped Location Token | Centre of the work area / herd pen |
+| **Deposit Token** | Stamped Location Token | Chest/barrel for produce/output/feed |
 
 Once all three slots are filled with valid stamped tokens the status line reads
 **"Kit ready — activates on close"**. Close the screen to activate.
@@ -354,10 +359,15 @@ When equipped with **shears**, a **Jobsite Token** (pen centre), and a **Deposit
 
 - Scans within **24 blocks** of the jobsite for adult, unshorn sheep.
 - Navigates to each sheep, shears it, and collects the wool.
-- When all sheep are shorn (or inventory is full), deposits wool at the chest.
-- Waits (~30 s between scans) for wool to regrow before the next round.
+- When all sheep are shorn, picks up any dropped wool, then checks the deposit chest for
+  **wheat** (left there by the Butcher). If found and breedable adult pairs exist, takes
+  the wheat, navigates to each breedable sheep, and feeds them to trigger love mode.
+- Deposits wool and any leftover wheat at the chest.
+- Waits for wool to regrow before the next round.
 - Automatically tags all nearby sheep to the pen on activation; tagged sheep are nudged
   back if they stray more than 20 blocks.
+- Re-tags any sheep whose collar colour doesn't match (e.g. from a dead or replaced
+  shepherd) — reclaims them to the current pen automatically.
 - If no gate is present, navigates directly to the jobsite centre (free-range mode).
 
 ---
@@ -370,12 +380,15 @@ dairy worker.
 
 ### What the Dairy worker does
 
-- Takes **empty buckets** from the deposit chest (one per cow to be milked).
-- Navigates to each untagged or tagged cow within **24 blocks**, milks it (swaps the
-  empty bucket for a milk bucket), plays the milking sound.
-- Returns all milk buckets — and any unused empty buckets — to the deposit chest.
+- Takes **empty buckets** from the deposit chest (one per cow to be milked), and also
+  takes any **wheat** present (left by the Butcher) for breeding.
+- Navigates to each cow within **24 blocks**, milks it, and immediately breeds it if
+  wheat is available and the cow is ready (adult, not already in love mode).
+- Returns all milk buckets, empty buckets, and leftover wheat to the deposit chest.
 - If the chest has no empty buckets, waits 20 s before retrying.
-- Automatically tags all nearby cows on activation. MooshroomsX are handled correctly.
+- Automatically tags all nearby cows on activation; re-tags any cow with a mismatched
+  colour (from a replaced dairy worker) to maintain herd integrity.
+- MooshroomsX are handled correctly.
 
 ---
 
@@ -389,8 +402,68 @@ collects eggs dropped naturally by chickens.
 - Scans within **24 blocks** of the jobsite for egg item entities on the ground.
 - Navigates to the egg, picks it up (and any other eggs within 2 blocks), then deposits
   at the chest.
+- After depositing, checks the chest for **wheat seeds** (left by the Butcher). If seeds
+  are present and ≥ 2 breedable adults are in the pen, takes the seeds and does a
+  breeding pass — navigates to each breedable adult chicken and feeds it one seed.
 - Waits 15 s between scans (eggs drop slowly — no point polling faster).
-- Automatically tags all nearby chickens on activation.
+- Automatically tags all nearby chickens on activation; re-tags any chicken with a
+  mismatched colour from a replaced worker.
+
+---
+
+## Butcher Role
+
+When equipped with a **sword** (any tier), a **Jobsite Token** (home base for herd
+discovery), and a **Deposit Token** (home chest for meat and feed supply), a worker
+operates as an autonomous butcher.
+
+### What the Butcher does
+
+- On each cycle, loads the appropriate **feed** from the home deposit chest (wheat for
+  sheep/cows, carrots for pigs, wheat seeds for chickens — up to 32 of each).
+- Discovers all tagged herds within **64 blocks** of the jobsite by scanning for tagged
+  animals and grouping them by pen.
+- **Visits each herd in sequence:**
+  - Culls animals down to a minimum of **6 per herd**, collecting all dropped meat and
+    other drops within 3 blocks.
+  - Navigates to the nearest chest within **5 blocks** of the herd's jobsite position
+    and deposits the species-appropriate feed there (this is the same chest the
+    Shepherd/Dairy/Chicken worker uses as their deposit).
+- Returns home and deposits all collected meat and drops into the home chest.
+- Waits 30 s before the next circuit.
+
+### Setting up a Butcher
+
+1. Place a home chest for meat output and feed supply — this is the **Deposit Token** chest.
+2. Stamp a **Jobsite Token** anywhere near the centre of your farm complex.
+3. Place feed (wheat, carrots, wheat seeds) in the home chest for the first cycle.
+4. Ensure each livestock pen has a chest within **5 blocks** of that pen's jobsite
+   marker — the Shepherd/Dairy/Chicken NPC's deposit chest works perfectly.
+5. Equip the Butcher NPC with a sword, both tokens, and close the Role tab.
+
+The Butcher's feed deposit and the Shepherd/Dairy/Chicken's deposit chest being the
+same physical chest is what closes the replenishment loop.
+
+---
+
+## Breeder Role
+
+An optional standalone breeding NPC. Equip with a **lead**, a **Jobsite Token** (herd
+pen centre), and a **Deposit Token** (food source chest). Use this if you want a
+dedicated breeder rather than relying on the integrated breeding in each role brain.
+
+### What the Breeder does
+
+- Navigates to the deposit chest, takes up to 16 wheat, 16 carrots, and 16 wheat seeds.
+- Scans within **24 blocks** of the jobsite for breedable adult animals (not babies,
+  not already in love mode) tagged to this pen.
+- Navigates to each breedable animal and feeds it the appropriate food (wheat →
+  sheep/cows, carrot → pigs, wheat seeds → chickens), triggering love mode.
+- Waits **2 minutes** between cycles (covers most of the vanilla breeding cooldown).
+
+> **Note:** If you are already using the Shepherd, Dairy, or Chicken roles, you do
+> **not** need a separate Breeder — breeding is integrated into those role brains.
+> The Breeder role is provided for mixed or non-standard setups.
 
 ---
 
@@ -509,6 +582,22 @@ used as the flat `layer0` fallback.
 ## Changelog
 
 ### v1.1.6 (2026-06-27/28)
+- **Butcher role:** workers equipped with a sword circuit all tagged herds, cull animals
+  down to a minimum of 6 per herd, collect drops, and deposit species-appropriate feed
+  (wheat/carrot/seeds) into the chest nearest each herd's jobsite. Meat and drops are
+  returned to the Butcher's home chest.
+- **Breeder role:** standalone optional role using a lead. Takes food from the deposit
+  chest, navigates to each breedable adult animal in the pen, and triggers love mode.
+  Waits 2 minutes between cycles.
+- **Integrated breeding — Shepherd:** after shearing, takes wheat from the deposit chest
+  and breeds breedable adult sheep before exiting the pen.
+- **Integrated breeding — Dairy:** takes wheat from the deposit chest during collection
+  and breeds each cow while milking it in the same visit.
+- **Integrated breeding — Chicken:** after depositing eggs, takes wheat seeds from the
+  chest and does a breeding pass on breedable adult chickens.
+- **Orphaned tag re-claiming:** all role brains now re-tag animals whose collar colour
+  doesn't match the current NPC (e.g. from a dead or replaced worker), so replacement
+  workers automatically reclaim their herd and the Butcher sees one unified herd.
 - **Dairy role:** workers equipped with a bucket milk cows and manage a bucket economy
   (takes empty buckets from the deposit chest, returns milk buckets). MooshroomsX handled.
 - **Chicken role:** workers equipped with a feather collect naturally dropped eggs and
@@ -522,6 +611,7 @@ used as the flat `layer0` fallback.
   remove its tag.
 - **Collar rings gated behind Work Goggles:** rings only render while the player has
   Work Goggles equipped in the helmet slot.
+- **Jobsite Token slot:** recoloured from blue to red in the Role tab GUI.
 - **Mid-path chest avoidance:** pathfinder now prefers routes that don't cross chest or
   barrel lids.
 - **Shepherd — no-gate fallback:** if no fence gate is found near the jobsite, the
@@ -626,9 +716,11 @@ used as the flat `layer0` fallback.
 
 ### Roles implemented
 - [x] Farmer (hoe) — harvest, replant, till, deposit
-- [x] Shepherd (shears) — shear sheep, deposit wool, gate management
-- [x] Dairy (bucket) — milk cows, bucket economy, deposit milk
-- [x] Chicken (feather) — collect dropped eggs, deposit
+- [x] Shepherd (shears) — shear sheep, deposit wool, gate management, integrated breeding
+- [x] Dairy (bucket) — milk cows, bucket economy, deposit milk, integrated breeding
+- [x] Chicken (feather) — collect dropped eggs, deposit, integrated breeding
+- [x] Butcher (sword) — multi-herd circuit, cull to min 6, collect drops, deposit feed, return meat
+- [x] Breeder (lead) — standalone breeding NPC (optional if using Shepherd/Dairy/Chicken)
 
 ### Livestock system
 - [x] Livestock Tag — claim animals to a pen, nudge strays back
@@ -636,6 +728,7 @@ used as the flat `layer0` fallback.
 - [x] Per-herd colours — each NPC worker gets a unique ring colour
 - [x] Charged tags — right-click worker to charge with worker's herd colour
 - [x] Untag gesture — sneak + right-click
+- [x] Orphaned tag re-claiming — replacement NPC auto-reclaims previous worker's animals
 
 ### Night behaviour
 - [x] NightBrain — sleep at dusk, wake at dawn
@@ -643,7 +736,7 @@ used as the flat `layer0` fallback.
 - [x] ignoreDark toggle — work through the night
 
 ### Polish / future
-- [ ] Additional roles: Breeder, Butcher, Miner, Woodcutter
+- [ ] Additional roles: Miner, Woodcutter
 - [ ] Pathfinding: multi-dimension support
 - [ ] Sounds: footstep and work-complete sounds
 - [ ] Location Tokens: visual beam at stamped position
