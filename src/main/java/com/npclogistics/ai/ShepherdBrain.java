@@ -480,6 +480,7 @@ public class ShepherdBrain {
             if (!(animal instanceof LivestockTaggable taggable)) continue;
             if (!taggable.npclogistics_isTagged()) {
                 taggable.npclogistics_setTagged(true, jobsite);
+                taggable.npclogistics_setOwnerColor(LivestockTaggable.colorForOwner(worker.getUuid()));
                 count++;
             }
         }

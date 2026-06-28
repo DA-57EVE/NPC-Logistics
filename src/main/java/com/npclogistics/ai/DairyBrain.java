@@ -321,7 +321,11 @@ public class DairyBrain {
         int count = 0;
         for (CowEntity cow : cows) {
             if (!(cow instanceof LivestockTaggable t)) continue;
-            if (!t.npclogistics_isTagged()) { t.npclogistics_setTagged(true, jobsite); count++; }
+            if (!t.npclogistics_isTagged()) {
+                t.npclogistics_setTagged(true, jobsite);
+                t.npclogistics_setOwnerColor(LivestockTaggable.colorForOwner(worker.getUuid()));
+                count++;
+            }
         }
         if (count > 0)
             NPClogistics.LOGGER.info("{} dairy tagged {} cows", worker.getName().getString(), count);

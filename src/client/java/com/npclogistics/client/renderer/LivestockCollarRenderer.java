@@ -21,10 +21,7 @@ import java.util.List;
 
 public class LivestockCollarRenderer {
 
-    private static final int   SEGMENTS = 24;
-    private static final float GOLD_R   = 1.00f;
-    private static final float GOLD_G   = 0.84f;
-    private static final float GOLD_B   = 0.00f;
+    private static final int SEGMENTS = 24;
 
     public static void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(LivestockCollarRenderer::render);
@@ -65,6 +62,11 @@ public class LivestockCollarRenderer {
         buf.begin(VertexFormat.DrawMode.LINES, VertexFormats.LINES);
 
         for (MobEntity mob : tagged) {
+            int   packed = ((LivestockTaggable) mob).npclogistics_getOwnerColor();
+            float colR   = ((packed >> 16) & 0xFF) / 255f;
+            float colG   = ((packed >>  8) & 0xFF) / 255f;
+            float colB   = ( packed        & 0xFF) / 255f;
+
             Vec3d pos    = mob.getLerpedPos(tickDelta);
             float neckY  = (float) (mob.getHeight() * 0.75);
             float radius = mob.getWidth() * 0.5f;
@@ -80,8 +82,8 @@ public class LivestockCollarRenderer {
                 float nx = (float) Math.cos((a1 + a2) * 0.5);
                 float nz = (float) Math.sin((a1 + a2) * 0.5);
 
-                buf.vertex(posMatrix, x1, y, z1).color(GOLD_R, GOLD_G, GOLD_B, 1.0f).normal(normMatrix, nx, 0, nz).next();
-                buf.vertex(posMatrix, x2, y, z2).color(GOLD_R, GOLD_G, GOLD_B, 1.0f).normal(normMatrix, nx, 0, nz).next();
+                buf.vertex(posMatrix, x1, y, z1).color(colR, colG, colB, 1.0f).normal(normMatrix, nx, 0, nz).next();
+                buf.vertex(posMatrix, x2, y, z2).color(colR, colG, colB, 1.0f).normal(normMatrix, nx, 0, nz).next();
             }
         }
 

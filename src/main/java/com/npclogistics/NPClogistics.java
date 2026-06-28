@@ -3,6 +3,7 @@ package com.npclogistics;
 import com.npclogistics.command.WorkOrderCommand;
 import com.npclogistics.data.WorkOrder.StopAction;
 import com.npclogistics.entity.LivestockTaggable;
+import com.npclogistics.entity.LogisticsWorkerEntity;
 import com.npclogistics.entity.ModEntities;
 import com.npclogistics.item.LivestockTagItem;
 import com.npclogistics.item.LocationTokenItem;
@@ -137,6 +138,27 @@ public class NPClogistics implements ModInitializer {
             return ActionResult.SUCCESS;
         });
 
+        // Livestock Tag: right-click a worker NPC with an unstamped tag to charge it with that worker's herd color.
+        UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
+            if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
+            ItemStack stack = player.getStackInHand(hand);
+            if (!(stack.getItem() instanceof LivestockTagItem)) return ActionResult.PASS;
+            if (!(entity instanceof LogisticsWorkerEntity worker)) return ActionResult.PASS;
+            if (LivestockTagItem.hasPos(stack)) return ActionResult.PASS; // already stamped; let worker interact handle it
+
+            if (world.isClient) return ActionResult.SUCCESS;
+
+            LivestockTagItem.setOwnerColor(stack, LivestockTaggable.colorForOwner(worker.getUuid()));
+            player.sendMessage(
+                    Text.literal("Tag charged with " + worker.getName().getString() + "'s herd colour.")
+                            .formatted(Formatting.AQUA),
+                    true);
+            if (player instanceof ServerPlayerEntity sp) {
+                sp.networkHandler.sendPacket(new ScreenHandlerSlotUpdateS2CPacket(-2, 0, sp.getInventory().selectedSlot, stack));
+            }
+            return ActionResult.SUCCESS;
+        });
+
         // Livestock Tag: right-click an animal with a stamped tag to claim it to that pen.
         UseEntityCallback.EVENT.register((player, world, hand, entity, hitResult) -> {
             if (hand != Hand.MAIN_HAND) return ActionResult.PASS;
@@ -167,8 +189,14 @@ public class NPClogistics implements ModInitializer {
                 return ActionResult.FAIL;
             }
 
+            int color = LivestockTagItem.hasOwnerColor(stack)
+                    ? LivestockTagItem.getOwnerColor(stack)
+                    : LivestockTaggable.colorForOwner(player.getUuid());
+
             BlockPos jobsite = LivestockTagItem.getPos(stack);
-            ((LivestockTaggable) entity).npclogistics_setTagged(true, jobsite);
+            LivestockTaggable taggable2 = (LivestockTaggable) entity;
+            taggable2.npclogistics_setTagged(true, jobsite);
+            taggable2.npclogistics_setOwnerColor(color);
             player.sendMessage(
                     Text.literal(entity.getName().getString() + " tagged to pen at " + jobsite.toShortString())
                             .formatted(Formatting.GREEN),

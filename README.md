@@ -4,8 +4,8 @@
 
 A Minecraft Fabric mod that adds **Logistics Worker NPCs** capable of executing
 item-collection and delivery routes across chests and barrels, and **Role-based autonomous
-workers** that perform ongoing jobs — starting with a fully functional **Farmer** role that
-independently tills, plants, harvests, restocks seeds, and deposits produce.
+workers** that perform ongoing jobs — including a **Farmer**, **Shepherd**, **Dairy**, and
+**Chicken** role, each running independently with no further player input after setup.
 
 ---
 
@@ -44,37 +44,46 @@ src/
 │   ├── NPClogistics.java               # Server entrypoint
 │   ├── ai/
 │   │   ├── WorkOrderBrain.java         # Tick-based route execution AI
-│   │   └── FarmerBrain.java            # Farmer role state machine (scan/navigate/work/deposit)
+│   │   ├── FarmerBrain.java            # Farmer role state machine
+│   │   ├── ShepherdBrain.java          # Shepherd role state machine
+│   │   ├── DairyBrain.java             # Dairy role state machine
+│   │   ├── ChickenBrain.java           # Chicken role state machine
+│   │   └── NightBrain.java             # Night/sleep behaviour
 │   ├── command/
 │   │   └── WorkOrderCommand.java       # /workorder admin commands
 │   ├── data/
 │   │   ├── WorkOrder.java              # Core data: route stops, filters, NBT
-│   │   └── CraftingTask.java           # Crafting task data (source/craft/deposit locations)
+│   │   └── CraftingTask.java           # Crafting task data
 │   ├── entity/
 │   │   ├── LogisticsWorkerEntity.java  # NPC entity (inventory, state machine)
+│   │   ├── LivestockTaggable.java      # Interface for tagged mob data
 │   │   └── ModEntities.java            # Entity type + attribute registration
 │   ├── item/
 │   │   ├── WorkOrderScrollItem.java    # In-hand tool for recording routes
-│   │   ├── LocationTokenItem.java      # Location token item — stores a stamped BlockPos
+│   │   ├── LocationTokenItem.java      # Location token item
+│   │   ├── LivestockTagItem.java       # Livestock tag item
 │   │   └── ModItems.java               # Item registration
+│   ├── mixin/
+│   │   └── MobEntityMixin.java         # Injects livestock tag data into all MobEntity
 │   ├── role/
 │   │   └── RoleRegistry.java           # Maps role-tool items to role brain types
 │   ├── screen/
-│   │   ├── EquipmentScreenHandler.java # Server-side handler for NPC Worker GUI
-│   │   └── ModScreenHandlers.java      # Screen handler registration
+│   │   ├── EquipmentScreenHandler.java
+│   │   └── ModScreenHandlers.java
 │   └── network/
-│       └── ModNetworking.java          # C2S / S2C packet definitions
+│       └── ModNetworking.java
 │
 └── client/java/com/npclogistics/
-    ├── NPClogisticsClient.java         # Client entrypoint
+    ├── NPClogisticsClient.java
     ├── client/network/
-    │   └── ClientNetworking.java       # Client packet handlers
+    │   └── ClientNetworking.java
     ├── renderer/
-    │   └── LogisticsWorkerRenderer.java # Biped renderer for worker NPC
+    │   ├── LogisticsWorkerRenderer.java
+    │   └── LivestockCollarRenderer.java # Renders herd-colour collar rings
     └── screen/
-        ├── EquipmentScreen.java        # NPC Worker GUI (Equipment / Orders / Cargo / Tasks tabs)
-        ├── WorkOrderScreen.java        # In-game route editor GUI (drag to reorder)
-        └── WorkOrderStopFilterScreen.java # Per-stop item-filter editor
+        ├── EquipmentScreen.java
+        ├── WorkOrderScreen.java
+        └── WorkOrderStopFilterScreen.java
 ```
 
 ---
@@ -103,6 +112,28 @@ Tokens are obtained from the creative *Tools & Utilities* tab or crafted in surv
 Right-click a block to record its position into the token; the tooltip shows the stored
 coordinates.
 
+### Livestock Tag
+
+A tag that claims an animal to a specific pen location (and herd). Right-click any block
+to stamp the pen location into the tag, then right-click an animal to claim it.
+Claimed animals are nudged back toward their pen if they stray more than 20 blocks.
+
+**Equipping Work Goggles** while near tagged animals shows a coloured collar ring around
+each animal's neck. All animals belonging to the same NPC worker display the same ring
+colour; different workers (and different players) get distinct colours.
+
+**Optional: charging a tag with a worker's colour** — right-click an NPC worker with an
+unstamped tag before stamping a block. The tag is charged with that worker's herd colour
+so any animals you tag manually match the worker's auto-tagged ring colour.
+
+To remove a tag from an animal: **sneak + right-click** with an empty hand.
+
+### Work Goggles
+
+A helmet-slot item that renders route overlays and livestock collar rings for nearby
+NPC workers. Overlays render through walls. Craft with 2× Glass Pane + Iron Ingot +
+Gold Ingot (shapeless).
+
 #### Crafting recipes (shapeless)
 
 | Item | Ingredients |
@@ -113,6 +144,7 @@ coordinates.
 | Deposit Token | Gold Ingot + Emerald |
 | Jobsite Token | Gold Ingot + Compass |
 | Bed Token | Gold Ingot + Feather |
+| Livestock Tag (×4) | Gold Ingot + String |
 | Work Goggles | 2× Glass Pane + Iron Ingot + Gold Ingot |
 | Logistics Worker Spawn Egg | Egg + Emerald + Iron Ingot |
 
@@ -211,15 +243,17 @@ directly; workers fill it themselves during collection stops.
 
 Assign an autonomous **Role** to the worker using a three-slot kit:
 
-| Slot | Item | Purpose |
-|------|------|---------|
-| **Tool** | A hoe (any tier) | Activates the Farmer role |
+| Slot | Item | Role activated |
+|------|------|---------------|
+| **Tool** | Hoe (any tier) | Farmer |
+| **Tool** | Shears | Shepherd |
+| **Tool** | Bucket | Dairy |
+| **Tool** | Feather | Chicken |
 | **Jobsite Token** | Stamped Location Token | Centre of the work area |
-| **Deposit Token** | Stamped Location Token | Chest/barrel to deposit produce into |
+| **Deposit Token** | Stamped Location Token | Chest/barrel for produce/output |
 
-Stamp a **Location Token** by right-clicking any block — the tooltip will show the
-recorded coordinates. Once all three slots are filled with valid stamped tokens the
-status line reads **"Kit ready — activates on close"**. Close the screen to activate.
+Once all three slots are filled with valid stamped tokens the status line reads
+**"Kit ready — activates on close"**. Close the screen to activate.
 
 The worker's role activates automatically and persists across server restarts via NBT.
 To remove a role, open the screen, take the items back out of the kit slots, and close.
@@ -283,7 +317,7 @@ Hovering over an empty slot shows a colour-coded hint describing what goes there
 
 ## Farmer Role
 
-When equipped with a hoe tool, a stamped **Jobsite Token**, and a stamped **Deposit Token**,
+When equipped with a **hoe**, a stamped **Jobsite Token**, and a stamped **Deposit Token**,
 a worker operates as an autonomous farmer. No further input is needed after setup.
 
 ### What the Farmer does
@@ -293,32 +327,112 @@ of the jobsite token's position:
 
 | Priority | Action | Detail |
 |----------|--------|--------|
-| 1 | **Pick up dropped items** | Collects item entities (e.g. mob loot) anywhere in the scan radius before doing any crop work |
+| 1 | **Pick up dropped items** | Collects item entities in the scan radius before doing any crop work |
 | 2 | **Harvest mature crops** | Breaks fully grown wheat, carrots, potatoes, or beetroot; replants from inventory in the same tick |
 | 3 | **Plant on empty farmland** | Seeds bare farmland blocks when seeds are available |
-| 4 | **Till adjacent dirt/grass** | Hoes bare dirt or grass blocks adjacent to existing farmland (within **10 blocks** of the jobsite) — gradually expands the farm footprint |
+| 4 | **Till adjacent dirt/grass** | Hoes bare dirt or grass blocks adjacent to existing farmland (within **10 blocks** of the jobsite) |
 
-After a harvest run the worker walks to the deposit chest at realistic speed, opens it,
-deposits all produce, restocks seeds (up to 16 of each type), then closes the chest and
-returns to scanning. Seed-only inventories do not trigger a deposit trip.
+After a harvest run the worker deposits all produce at the deposit chest, restocks seeds
+(up to 16 of each type), then returns to scanning.
 
 ### Setting up a farm
 
-1. Place a chest or barrel near your farm — this is the **deposit chest**.
-2. Pick a reference block at the centre of the farm area as the **jobsite**.
-3. Stamp two **Location Tokens** (right-click the relevant blocks).
-4. Open the worker's **Role tab**, place a hoe in the Tool slot and the stamped tokens
-   in the Jobsite and Deposit slots.
+1. Place a chest near your farm — this is the **deposit chest**.
+2. Stamp a **Jobsite Token** on a block at the centre of the farm area.
+3. Stamp a **Deposit Token** on the deposit chest.
+4. Open the worker's **Role tab**, place the hoe and both tokens in the three slots.
 5. Close the screen — the worker activates immediately.
 
-**Tips:**
-- Surround the farm with fencing or a wall to stop the worker tilling beyond your
-  intended boundary (the 10-block hoe radius is measured from the jobsite, not the
-  farm edge).
-- The worker collects all dropped items in the full 24-block scan radius — handy for
-  picking up mob loot near the farm automatically.
-- Two farmers sharing the same jobsite and deposit chest work cooperatively without
-  any configuration; they independently pick different targets.
+---
+
+## Shepherd Role
+
+When equipped with **shears**, a **Jobsite Token** (pen centre), and a **Deposit Token**
+(wool chest), a worker operates as an autonomous shepherd.
+
+### What the Shepherd does
+
+- Scans within **24 blocks** of the jobsite for adult, unshorn sheep.
+- Navigates to each sheep, shears it, and collects the wool.
+- When all sheep are shorn (or inventory is full), deposits wool at the chest.
+- Waits (~30 s between scans) for wool to regrow before the next round.
+- Automatically tags all nearby sheep to the pen on activation; tagged sheep are nudged
+  back if they stray more than 20 blocks.
+- If no gate is present, navigates directly to the jobsite centre (free-range mode).
+
+---
+
+## Dairy Role
+
+When equipped with a **bucket**, a **Jobsite Token** (near the cows), and a **Deposit Token**
+(a chest that acts as both bucket store and milk output), a worker operates as an autonomous
+dairy worker.
+
+### What the Dairy worker does
+
+- Takes **empty buckets** from the deposit chest (one per cow to be milked).
+- Navigates to each untagged or tagged cow within **24 blocks**, milks it (swaps the
+  empty bucket for a milk bucket), plays the milking sound.
+- Returns all milk buckets — and any unused empty buckets — to the deposit chest.
+- If the chest has no empty buckets, waits 20 s before retrying.
+- Automatically tags all nearby cows on activation. MooshroomsX are handled correctly.
+
+---
+
+## Chicken Role
+
+When equipped with a **feather**, a **Jobsite Token**, and a **Deposit Token**, a worker
+collects eggs dropped naturally by chickens.
+
+### What the Chicken worker does
+
+- Scans within **24 blocks** of the jobsite for egg item entities on the ground.
+- Navigates to the egg, picks it up (and any other eggs within 2 blocks), then deposits
+  at the chest.
+- Waits 15 s between scans (eggs drop slowly — no point polling faster).
+- Automatically tags all nearby chickens on activation.
+
+---
+
+## Night Behaviour
+
+By default, all workers stop at dusk and seek shelter:
+
+1. Navigate to the assigned **Bed Token** position if one is set.
+2. Scan for any unoccupied bed within 16 blocks.
+3. Navigate 2 blocks inside the nearest door.
+4. Snore in place if no shelter is found.
+
+At dawn, workers wake, stand up, and resume their role or delivery route exactly where
+they left off.
+
+The **Sleep at Night** toggle in the Role tab disables this so the worker is active 24/7.
+
+---
+
+## Livestock Tags and Collar Rings
+
+**Livestock Tags** claim animals to a pen so that strays are automatically nudged back.
+Collar rings (visible through **Work Goggles**) show which herd each animal belongs to —
+each NPC worker gets a unique colour derived from their identity, so Dave's flock and
+Jones's flock are always visually distinct.
+
+### Tagging workflow
+
+1. **Stamp the tag** — right-click any block to record the pen location. The tag renames
+   to `Livestock Tag [x, y, z]`.
+2. **Tag an animal** — right-click any sheep, cow, pig, or chicken. The animal is claimed
+   and shows a collar ring (visible with Work Goggles).
+3. **Untag** — sneak + right-click the animal with an empty hand.
+
+### Matching a worker's herd colour
+
+Right-click the **NPC worker** with an unstamped tag before step 1. The tag charges with
+that worker's herd colour (`Livestock Tag [charged]`). Stamp a block, then tag animals as
+normal — they will match the worker's ring colour exactly.
+
+Role brains (Shepherd, Dairy, Chicken) auto-tag their animals on activation, so manual
+tags are only needed for animals outside the scan radius or when managing mixed herds.
 
 ---
 
@@ -394,93 +508,97 @@ used as the flat `layer0` fallback.
 
 ## Changelog
 
+### v1.1.6 (2026-06-27/28)
+- **Dairy role:** workers equipped with a bucket milk cows and manage a bucket economy
+  (takes empty buckets from the deposit chest, returns milk buckets). MooshroomsX handled.
+- **Chicken role:** workers equipped with a feather collect naturally dropped eggs and
+  deposit them to the chest.
+- **Per-herd collar colours:** each NPC worker's tagged animals display a unique ring
+  colour derived from the worker's identity. Animals belonging to different workers are
+  visually distinct when viewed through Work Goggles.
+- **Charged Livestock Tag:** right-click an NPC worker with an unstamped tag to charge
+  it with that worker's herd colour; manually tagged animals then match the worker's ring.
+- **Livestock Tag untag gesture:** sneak + right-click an animal with an empty hand to
+  remove its tag.
+- **Collar rings gated behind Work Goggles:** rings only render while the player has
+  Work Goggles equipped in the helmet slot.
+- **Mid-path chest avoidance:** pathfinder now prefers routes that don't cross chest or
+  barrel lids.
+- **Shepherd — no-gate fallback:** if no fence gate is found near the jobsite, the
+  shepherd navigates directly to the jobsite centre (free-range mode).
+- **Stray enforcement:** threshold reduced from 32 to 20 blocks.
+- **Livestock tagging restricted:** Shepherd auto-tags sheep only; Dairy auto-tags cows
+  only; manual tags restricted to sheep, cows, pigs, and chickens (rabbits excluded).
+
+### v1.1.5 (2026-06-19)
+- **Livestock Tag:** new item (Gold Ingot + String × 4, shapeless). Stamps a pen location,
+  claims animals to that pen, and nudges strays back automatically every 5 s.
+- **Collar rings:** gold rings render around the neck of all tagged animals when Work
+  Goggles are equipped (via `WorldRenderEvents.AFTER_ENTITIES`).
+- **MobEntityMixin:** injects `npclogistics_tagged` (synced DataTracker bool) and
+  `npclogistics_jobsite` (server-side NBT) into all `MobEntity`.
+
 ### v1.3.7 (2026-06-19)
 - **Logistics Worker Spawn Egg:** workers can now be spawned in survival via a craftable spawn egg (Egg + Emerald + Iron Ingot, shapeless). Also available in the creative Tools & Utilities tab.
 - **Jobsite Token recoloured:** token is now red (was purple).
 - **Bed Token recoloured:** token is now white/silver (was light blue).
 
 ### v1.3.6 (2026-06-19)
-- **Bug — Equipment tab tooltip:** hovering the Order 2 slot incorrectly showed "Bed Token" as the slot label; fixed by correcting the slot registration order so screen-slot index matches inventory index.
-- **Bug — Farmer carrot/potato deposit:** workers retained carrots and potatoes when the total was split across multiple small inventory stacks (each under the 16-item threshold). Deposit now checks the per-type total across all slots.
-- **NPC sleeping position:** sleeping offset reduced from 0.25 to 0.1 blocks toward the foot, placing the worker's head closer to the headboard.
+- **Bug — Equipment tab tooltip:** hovering the Order 2 slot incorrectly showed "Bed Token" as the slot label; fixed.
+- **Bug — Farmer carrot/potato deposit:** deposit now checks the per-type total across all slots (was per-slot, letting multiple small stacks through).
+- **NPC sleeping position:** sleeping offset reduced from 0.25 to 0.1 blocks toward the foot.
 
 ### v1.3.5 (2026-06-19)
-- **UI — Equipment tab:** Employer label moved to the top-right corner; no longer overlaps the Bed Token slot.
-- **UI — Role tab:** ROLE KIT header no longer overlaps the tool/jobsite/deposit slot row; Sleep at Night button has added top padding to prevent overlap with the "Night behavior:" label.
-- **NPC sleeping — correct bed half:** workers now resolve the HEAD block of a bed before sleeping, regardless of which half was stored in the token or found by scanning. Works for all four bed orientations.
-- **NPC sleeping — headboard offset:** sleeping position shifted 0.25 blocks toward the foot of the bed so the worker is not pressed against the headboard.
-- **NPC wake — pose reset:** SLEEPING pose is unconditionally cleared at dawn, preventing workers from moving around in the lying-down position after waking.
+- **UI — Equipment tab:** Employer label moved to top-right corner.
+- **UI — Role tab:** layout fixes for ROLE KIT header and Sleep at Night button.
+- **NPC sleeping — correct bed half:** workers resolve the HEAD block of a bed before sleeping.
+- **NPC sleeping — headboard offset:** sleeping position shifted 0.25 blocks toward the foot.
+- **NPC wake — pose reset:** SLEEPING pose cleared unconditionally at dawn.
 - **Bed Token recipe:** Gold Ingot + Feather (shapeless).
 
 ### v1.3.4 (2026-06-13)
-- **Night behavior:** workers sleep at night by default. At dusk they navigate to an assigned bed (via Bed Token in the Equipment tab), the nearest unoccupied bed within 16 blocks, or shelter near a door; if no shelter is found they snore in place. At dawn they wake, stand up, and resume their role.
-- **Bed Token:** new light-blue Location Token that records a bed position. Place a stamped Bed Token in the worker's Equipment tab to give them a personal sleeping spot.
-- **`ignoreDark` toggle (Sleep at Night button):** disabling it in the Role tab keeps the worker active around the clock.
+- **Night behavior:** workers sleep at night by default. Navigate to assigned bed (Bed Token), nearest unoccupied bed, shelter near a door, or snore in place. Wake and resume at dawn.
+- **Bed Token:** new white/silver Location Token for recording a worker's personal sleeping spot.
+- **`ignoreDark` toggle:** disabling Sleep at Night in the Role tab keeps the worker active around the clock.
 
 ### v1.3.3 (2026-06-13)
-- **Shepherd role:** workers equipped with shears, a Jobsite Token (pen centre), and a Deposit Token (wool chest) operate as shepherds — open the pen gate, shear all adult unsheared sheep within 24 blocks, deposit wool at the chest, and repeat.
-- **WAITING phase:** all role brains (Farmer, Shepherd) have an explicit idle-wait state. Workers pause up to ~30 s for crops to mature or sheep to regrow before rescanning, instead of busy-looping.
-- **NPC chest approach:** workers now navigate to the side of a deposit chest rather than on top of it.
-- **Gate exit fix:** shepherd gate open/close logic corrected so the gate is properly closed when the shepherd exits the pen.
+- **Shepherd role:** workers equipped with shears shear all sheep in the pen, deposit wool, and repeat.
+- **WAITING phase:** all role brains have an explicit idle-wait state between work cycles.
+- **NPC chest approach:** workers navigate to the side of a chest rather than on top of it.
+- **Gate exit fix:** two-stage exit (walk to gate, open, step through) for smooth pen departure.
 
 ### v1.3.2 (2026-06-11)
-- **Cargo tab polish:** box extended to fill the panel area (text no longer overflows the bottom),
-  heading renamed to "Cargo Hold", slot grid indented to match the inventory section, and hint
-  text repositioned closer to the slot grid.
+- **Cargo tab polish:** box extended, heading renamed to "Cargo Hold", slot grid indented.
 
 ### v1.3.1 (2026-06-11)
-- **Immediate work resumption:** when a worker arrives home after completing a non-repeating route
-  or a task chain, it now calls `activateWorkOrders()` straight away instead of waiting for the
-  next scheduled auto-fire window (up to ~9 min).
+- **Immediate work resumption:** worker calls `activateWorkOrders()` on arriving home instead of waiting for the next scheduled window.
 
 ### v1.3.0 (2026-06-11)
-- **Work Goggles:** new helmet-slot item (2× glass pane + iron ingot + gold ingot) that renders
-  route overlays for nearby NPC workers — coloured lines between stops (green=collect, red=deliver,
-  gold=both), wireframe boxes at each stop, and colour-coded billboard labels (sign text or
-  coordinates). Active stop and leg pulse. Lines render through walls.
-- **Goggle overlay — crafting tasks:** while a worker is executing a crafting task the overlay
-  shows the source → craft block → deposit triangle in real time.
-- **Goggle overlay — idle workers:** configured routes are visible even when the worker is idle
-  between auto-fire cycles (reads from scroll slots).
-- **30% task interleave on repeating routes:** when a repeating work order completes and the
-  worker returns home, there is a 30% chance the task list runs before the route restarts —
-  giving workers a natural "side-job" cadence without manual scheduling.
+- **Work Goggles:** renders route overlays (coloured lines, wireframe boxes, billboard labels) and livestock collar rings. Overlays render through walls.
+- **Goggle overlay — crafting tasks:** source → craft → deposit triangle in real time.
+- **Goggle overlay — idle workers:** configured routes visible even between auto-fire cycles.
+- **30% task interleave on repeating routes:** natural side-job cadence without manual scheduling.
 
 ### v1.2.0 (2026-06-11)
-- **CraftingTaskBrain — batch ingredient collection:** calculates the maximum number of
-  recipe cycles the source chest can supply and collects a full batch in one trip (up to 64
-  cycles), rather than exactly one cycle's worth.
-- **CraftingTaskBrain — loop crafting:** after collecting, the worker loops at the craft
-  block until no complete ingredient set remains, producing all possible output in one stop.
-  Furnace and stonecutter recipes loop similarly.
-- **CraftingTaskBrain — arm swing + sound:** NPC swings its arm at the craft block on
-  arrival and at the midpoint of the work pause; item-pickup sound plays when the craft
-  fires.
-- **Empty source handling:** when the source chest has no ingredients the worker skips
-  directly home without visiting the craft block. `runOnce` tasks are not marked complete
-  on an empty source — they remain eligible for the next activation.
-- **Navigation speed:** craft-block nav and return-home both run at 0.8 (was 1.0).
-- **Survival crafting recipes:** Work Order Scroll, and all four Location Token variants
-  now have JSON recipes craftable in survival.
+- **CraftingTaskBrain — batch ingredient collection and loop crafting.**
+- **CraftingTaskBrain — arm swing + sound.**
+- **Empty source handling:** worker skips home without visiting craft block.
+- **Navigation speed:** craft-block nav at 0.8.
+- **Survival crafting recipes** for Work Order Scroll and all Location Token variants.
 
 ### v1.1.2 (2026-06-11)
-- **Farmer arm swing animation** — NPC now visibly swings the hoe on harvest, plant, and
-  till actions. Root cause: `LivingEntity.tickHandSwing()` is never called by Minecraft for
-  non-player entities; explicitly calling it on the client path makes `BipedEntityModel`
-  render the swing correctly.
+- **Farmer arm swing animation** — NPC visibly swings the hoe on harvest, plant, and till.
 
 ### v1.1.1 (2026-06-10)
 - Hoe held persistently in hand while farmer role is active.
 - Batched harvesting — deposits every 6 harvests or when the farm runs dry.
-- Deposit trigger fixed for servers where hoe work always exists.
-- Item-entity pickup navigates to `y+1` so workers reach items resting on farmland.
-- Deposit chest approach from the side (not on top).
+- Item-entity pickup navigates to `y+1`.
+- Deposit chest approach from the side.
 
 ### v1.1.0 (2026-06-10)
 - Farmer role: autonomous harvest → replant → deposit loop.
 - Role tab in NPC GUI (Tool + Jobsite Token + Deposit Token kit).
 - Idle farm expansion via hoe-tilling adjacent dirt/grass blocks.
-- Two farmers share a jobsite cooperatively with no extra configuration.
 
 ### v1.0.0
 - Initial release: Work Order Scroll routes, NPC Worker GUI, per-stop item filters,
@@ -491,42 +609,41 @@ used as the flat `layer0` fallback.
 ## Roadmap / TODO
 
 ### Logistics (Work Order routes)
-- [x] GUI: per-stop item filter editor (click to add/remove items)
+- [x] GUI: per-stop item filter editor
 - [x] GUI: drag-to-reorder stops
-- [x] Combined COLLECT + DELIVER at a single stop (deliver then collect, two filters)
+- [x] Combined COLLECT + DELIVER at a single stop
 - [x] NPC Worker GUI (Equipment / Orders / Cargo / Tasks / Role tabs)
-- [x] Cargo tab — take-only view of the worker's 18-slot internal inventory
 - [x] Worker employer system (claim, rename, skin URL)
-- [x] Sounds: chest/barrel open + close sounds on NPC container interaction
-- [x] Any `Inventory` block entity accepted as a route stop (chests, barrels, hoppers, droppers, shulker boxes, etc.)
-- [x] Support for double-chests and other mod storage blocks via Fabric Transfer API
-- [x] CraftingTaskBrain: full navigation + crafting execution (collect → craft → deposit)
-- [ ] Visual route overlay (coloured position beams)
-- [x] Crafting recipe for Work Order Scroll and Location Tokens
+- [x] Sounds: chest/barrel open + close sounds
+- [x] CraftingTaskBrain: full navigation + crafting execution
+- [x] Crafting recipe for Work Order Scroll and all Location Tokens
 
 ### Role system
-- [x] Role tab in NPC GUI — three-slot kit (Tool + Jobsite Token + Deposit Token)
-- [x] RoleRegistry — maps hoe item → Farmer role; extensible for future roles
-- [x] Kit validation with specific feedback (stamped/unstamped token detection)
+- [x] Role tab in NPC GUI — three-slot kit
+- [x] RoleRegistry — extensible role-tool mapping
 - [x] Role persists across server restarts via NBT
 - [x] Worker drops role kit items on death
 
-### Farmer role
-- [x] Harvests mature wheat, carrots, potatoes, and beetroot
-- [x] Replants from inventory immediately after harvesting
-- [x] Plants on bare farmland when seeds are available
-- [x] Deposits produce to chest; restocks seeds (up to 16 per type) on the same visit
-- [x] Seed-only inventory does not trigger a spurious deposit trip
-- [x] Idle hoe-tilling: expands farmland at the farm edge (within 10 blocks of jobsite)
-- [x] Picks up dropped item entities in the full scan area (mob loot, missed drops)
-- [x] Realistic walking speed; approaches deposit chest from the side, not on top
-- [x] Hoe arm-swing animation when tilling; hoe item shown in hand during the action
-- [x] Batched harvesting — collects up to 6 crops per deposit run; deposits immediately if farm runs dry
-- [x] Dropped-item pickup navigates correctly to items resting on farmland (y+1 fix)
-- [x] Two farmers share a jobsite cooperatively with no extra configuration
+### Roles implemented
+- [x] Farmer (hoe) — harvest, replant, till, deposit
+- [x] Shepherd (shears) — shear sheep, deposit wool, gate management
+- [x] Dairy (bucket) — milk cows, bucket economy, deposit milk
+- [x] Chicken (feather) — collect dropped eggs, deposit
+
+### Livestock system
+- [x] Livestock Tag — claim animals to a pen, nudge strays back
+- [x] Collar rings — visible through Work Goggles
+- [x] Per-herd colours — each NPC worker gets a unique ring colour
+- [x] Charged tags — right-click worker to charge with worker's herd colour
+- [x] Untag gesture — sneak + right-click
+
+### Night behaviour
+- [x] NightBrain — sleep at dusk, wake at dawn
+- [x] Bed Token — personal sleeping spot
+- [x] ignoreDark toggle — work through the night
 
 ### Polish / future
-- [ ] Additional roles: Miner, Woodcutter, Fisher
+- [ ] Additional roles: Breeder, Butcher, Miner, Woodcutter
 - [ ] Pathfinding: multi-dimension support
 - [ ] Sounds: footstep and work-complete sounds
 - [ ] Location Tokens: visual beam at stamped position

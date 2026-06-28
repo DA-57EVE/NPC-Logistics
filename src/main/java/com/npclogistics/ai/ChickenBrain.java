@@ -199,7 +199,11 @@ public class ChickenBrain {
         int count = 0;
         for (ChickenEntity chicken : chickens) {
             if (!(chicken instanceof LivestockTaggable t)) continue;
-            if (!t.npclogistics_isTagged()) { t.npclogistics_setTagged(true, jobsite); count++; }
+            if (!t.npclogistics_isTagged()) {
+                t.npclogistics_setTagged(true, jobsite);
+                t.npclogistics_setOwnerColor(LivestockTaggable.colorForOwner(worker.getUuid()));
+                count++;
+            }
         }
         if (count > 0)
             NPClogistics.LOGGER.info("{} chicken tagged {} chickens", worker.getName().getString(), count);

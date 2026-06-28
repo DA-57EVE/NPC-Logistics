@@ -32,11 +32,26 @@ public class LivestockTagItem extends Item {
         stack.getOrCreateNbt().put("pos", posNbt);
     }
 
+    public static boolean hasOwnerColor(ItemStack stack) {
+        return stack.hasNbt() && stack.getNbt().contains("ownerColor");
+    }
+
+    public static int getOwnerColor(ItemStack stack) {
+        return stack.getNbt().getInt("ownerColor");
+    }
+
+    public static void setOwnerColor(ItemStack stack, int packed) {
+        stack.getOrCreateNbt().putInt("ownerColor", packed);
+    }
+
     @Override
     public Text getName(ItemStack stack) {
         if (hasPos(stack)) {
             BlockPos pos = getPos(stack);
             return Text.literal("Livestock Tag [" + pos.toShortString() + "]");
+        }
+        if (hasOwnerColor(stack)) {
+            return Text.literal("Livestock Tag [charged]");
         }
         return super.getName(stack);
     }
