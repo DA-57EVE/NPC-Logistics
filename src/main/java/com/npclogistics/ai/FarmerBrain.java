@@ -103,7 +103,7 @@ public class FarmerBrain {
         double dist = worker.getPos().distanceTo(target.pos().toCenterPos());
         if (dist <= ARRIVAL_DIST) {
             BlockState state = world.getBlockState(target.pos());
-            boolean valid = (target.type() == WorkType.HARVEST && isMatureCrop(state))
+            boolean valid = (target.type() == WorkType.HARVEST && isHarvestableNow(world, target.pos()))
                     || (target.type() == WorkType.PLANT && state.isAir()
                             && world.getBlockState(target.pos().down()).getBlock() == Blocks.FARMLAND)
                     || target.type() == WorkType.PICKUP
@@ -140,7 +140,7 @@ public class FarmerBrain {
         if (target == null) { phase = FarmerPhase.SCANNING; return; }
 
         BlockState state = world.getBlockState(target.pos());
-        if (target.type() == WorkType.HARVEST && isMatureCrop(state)) {
+        if (target.type() == WorkType.HARVEST && isHarvestableNow(world, target.pos())) {
             harvestCrop(world, target.pos(), target.cropBlock());
         } else if (target.type() == WorkType.PLANT && state.isAir()
                 && world.getBlockState(target.pos().down()).getBlock() == Blocks.FARMLAND) {
@@ -224,15 +224,21 @@ public class FarmerBrain {
         for (int dx = -SCAN_RADIUS; dx <= SCAN_RADIUS; dx++) {
             for (int dz = -SCAN_RADIUS; dz <= SCAN_RADIUS; dz++) {
                 for (int dy = -3; dy <= 3; dy++) {
-                    BlockState state = world.getBlockState(center.add(dx, dy, dz));
-                    if (state.getBlock() instanceof CropBlock && !isMatureCrop(state)) {
-                        Block b = state.getBlock();
+                    BlockPos pos = center.add(dx, dy, dz);
+                    BlockState state = world.getBlockState(pos);
+                    Block b = state.getBlock();
+                    if (b instanceof CropBlock && !isMatureCrop(state)) {
                         if (b == Blocks.WHEAT)     return "wheat to mature";
                         if (b == Blocks.CARROTS)   return "carrots to mature";
                         if (b == Blocks.POTATOES)  return "potatoes to mature";
                         if (b == Blocks.BEETROOTS) return "beetroot to mature";
                         return "crops to mature";
                     }
+                    if (b == Blocks.MELON_STEM || b == Blocks.PUMPKIN_STEM) return "melon/pumpkin growing";
+                    if (b == Blocks.SUGAR_CANE && world.getBlockState(pos.down()).getBlock() != Blocks.SUGAR_CANE)
+                        return "sugar cane growing";
+                    if (b == Blocks.CACTUS && world.getBlockState(pos.down()).getBlock() != Blocks.CACTUS)
+                        return "cactus growing";
                 }
             }
         }
@@ -260,16 +266,22 @@ public class FarmerBrain {
         }
         if (best != null) return best; // item pickup before crop work
 
-        // Pass 1: look for harvestable crops
+        // Pass 1: look for harvestable crops, fruit blocks, and column crops
         for (int dx = -SCAN_RADIUS; dx <= SCAN_RADIUS; dx++) {
             for (int dz = -SCAN_RADIUS; dz <= SCAN_RADIUS; dz++) {
                 for (int dy = -3; dy <= 3; dy++) {
                     BlockPos pos = center.add(dx, dy, dz);
                     BlockState state = world.getBlockState(pos);
-                    if (isMatureCrop(state)) {
+                    Block b = state.getBlock();
+                    boolean harvestable = (b instanceof CropBlock crop && crop.isMature(state))
+                            || b == Blocks.MELON || b == Blocks.PUMPKIN
+                            || ((b == Blocks.SUGAR_CANE || b == Blocks.CACTUS)
+                                && world.getBlockState(pos.down()).getBlock() == b
+                                && world.getBlockState(pos.down().down()).getBlock() != b);
+                    if (harvestable) {
                         double d = worker.getPos().distanceTo(pos.toCenterPos());
                         if (d < bestDist) {
-                            best = new WorkTarget(pos, WorkType.HARVEST, state.getBlock());
+                            best = new WorkTarget(pos, WorkType.HARVEST, b);
                             bestDist = d;
                         }
                     }
@@ -288,6 +300,17 @@ public class FarmerBrain {
                             if (world.getBlockState(farmland).getBlock() != Blocks.FARMLAND) continue;
                             BlockPos cropPos = farmland.up();
                             if (!world.getBlockState(cropPos).isAir()) continue;
+                            // Leave space adjacent to melon/pumpkin stems for fruit to grow into
+                            boolean reservedForFruit = false;
+                            for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+                                Block nb = world.getBlockState(cropPos.offset(dir)).getBlock();
+                                if (nb == Blocks.MELON_STEM || nb == Blocks.PUMPKIN_STEM
+                                        || nb == Blocks.ATTACHED_MELON_STEM || nb == Blocks.ATTACHED_PUMPKIN_STEM) {
+                                    reservedForFruit = true;
+                                    break;
+                                }
+                            }
+                            if (reservedForFruit) continue;
                             double d = worker.getPos().distanceTo(cropPos.toCenterPos());
                             if (d < bestDist) {
                                 best = new WorkTarget(cropPos, WorkType.PLANT, seedCrop);
@@ -309,6 +332,17 @@ public class FarmerBrain {
                         Block b = world.getBlockState(pos).getBlock();
                         if (b != Blocks.DIRT && b != Blocks.GRASS_BLOCK) continue;
                         if (!world.getBlockState(pos.up()).isAir()) continue;
+                        // Skip spots adjacent to melon/pumpkin stems — fruit needs that space
+                        boolean reservedForFruit = false;
+                        for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+                            Block nb = world.getBlockState(pos.up().offset(dir)).getBlock();
+                            if (nb == Blocks.MELON_STEM || nb == Blocks.PUMPKIN_STEM
+                                    || nb == Blocks.ATTACHED_MELON_STEM || nb == Blocks.ATTACHED_PUMPKIN_STEM) {
+                                reservedForFruit = true;
+                                break;
+                            }
+                        }
+                        if (reservedForFruit) continue;
                         for (Direction dir : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
                             if (world.getBlockState(pos.offset(dir)).getBlock() == Blocks.FARMLAND) {
                                 hoeable.add(pos);
@@ -520,6 +554,17 @@ public class FarmerBrain {
         return state.getBlock() instanceof CropBlock crops && crops.isMature(state);
     }
 
+    private static boolean isHarvestableNow(ServerWorld world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        Block b = state.getBlock();
+        if (b instanceof CropBlock crop) return crop.isMature(state);
+        if (b == Blocks.MELON || b == Blocks.PUMPKIN) return true;
+        if (b == Blocks.SUGAR_CANE || b == Blocks.CACTUS)
+            return world.getBlockState(pos.down()).getBlock() == b
+                && world.getBlockState(pos.down().down()).getBlock() != b;
+        return false;
+    }
+
     /** Returns the crop Block matching a seed item the NPC currently has in inventory. */
     private Block getCropBlockFromInventory() {
         if (hasItem(Items.WHEAT_SEEDS))    return Blocks.WHEAT;
@@ -581,10 +626,14 @@ public class FarmerBrain {
     }
 
     private static List<ItemStack> getCropDrops(Block cropBlock) {
-        if (cropBlock == Blocks.WHEAT)     return List.of(new ItemStack(Items.WHEAT),    new ItemStack(Items.WHEAT_SEEDS));
-        if (cropBlock == Blocks.CARROTS)   return List.of(new ItemStack(Items.CARROT,  2));
-        if (cropBlock == Blocks.POTATOES)  return List.of(new ItemStack(Items.POTATO,  2));
-        if (cropBlock == Blocks.BEETROOTS) return List.of(new ItemStack(Items.BEETROOT), new ItemStack(Items.BEETROOT_SEEDS));
+        if (cropBlock == Blocks.WHEAT)      return List.of(new ItemStack(Items.WHEAT),      new ItemStack(Items.WHEAT_SEEDS));
+        if (cropBlock == Blocks.CARROTS)    return List.of(new ItemStack(Items.CARROT,    2));
+        if (cropBlock == Blocks.POTATOES)   return List.of(new ItemStack(Items.POTATO,    2));
+        if (cropBlock == Blocks.BEETROOTS)  return List.of(new ItemStack(Items.BEETROOT),   new ItemStack(Items.BEETROOT_SEEDS));
+        if (cropBlock == Blocks.MELON)      return List.of(new ItemStack(Items.MELON_SLICE, 5));
+        if (cropBlock == Blocks.PUMPKIN)    return List.of(new ItemStack(Items.PUMPKIN,    1));
+        if (cropBlock == Blocks.SUGAR_CANE) return List.of(new ItemStack(Items.SUGAR_CANE, 1));
+        if (cropBlock == Blocks.CACTUS)     return List.of(new ItemStack(Items.CACTUS,     1));
         return List.of();
     }
 
