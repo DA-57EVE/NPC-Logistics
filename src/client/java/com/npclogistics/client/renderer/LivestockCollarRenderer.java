@@ -13,7 +13,6 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.MobEntity;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.math.Vec3d;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
@@ -21,7 +20,8 @@ import java.util.List;
 
 public class LivestockCollarRenderer {
 
-    private static final int SEGMENTS = 24;
+    private static final int   SEGMENTS  = 24;
+    private static final float BAND_HALF = 0.05f; // 10 cm band height
 
     public static void register() {
         WorldRenderEvents.AFTER_ENTITIES.register(LivestockCollarRenderer::render);
@@ -32,34 +32,32 @@ public class LivestockCollarRenderer {
         if (client.world == null || client.player == null) return;
         if (!(client.player.getEquippedStack(EquipmentSlot.HEAD).getItem() instanceof WorkGogglesItem)) return;
 
-        Vec3d camPos = context.camera().getPos();
+        Vec3d camPos    = context.camera().getPos();
         float tickDelta = context.tickDelta();
-        Box viewBox = new Box(camPos.subtract(64, 64, 64), camPos.add(64, 64, 64));
+        Box viewBox     = new Box(camPos.subtract(64, 64, 64), camPos.add(64, 64, 64));
 
         List<MobEntity> tagged = new ArrayList<>();
-        for (Entity e : client.world.getEntitiesByClass(MobEntity.class, viewBox, mob ->
-                mob instanceof LivestockTaggable t && t.npclogistics_isTagged())) {
+        for (Entity e : client.world.getEntitiesByClass(MobEntity.class, viewBox,
+                mob -> mob instanceof LivestockTaggable t && t.npclogistics_isTagged())) {
             tagged.add((MobEntity) e);
         }
         if (tagged.isEmpty()) return;
 
-        MatrixStack matrices = context.matrixStack();
+        MatrixStack  matrices = context.matrixStack();
+        Tessellator  tes      = Tessellator.getInstance();
+        BufferBuilder buf     = tes.getBuffer();
 
-        Tessellator tes = Tessellator.getInstance();
-        BufferBuilder buf = tes.getBuffer();
-
-        RenderSystem.setShader(GameRenderer::getRenderTypeLinesProgram);
-        RenderSystem.lineWidth(2.5f);
+        RenderSystem.setShader(GameRenderer::getPositionColorProgram);
         RenderSystem.disableDepthTest();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
+        RenderSystem.disableCull();
 
         matrices.push();
         matrices.translate(-camPos.x, -camPos.y, -camPos.z);
-        Matrix4f posMatrix  = matrices.peek().getPositionMatrix();
-        Matrix3f normMatrix = matrices.peek().getNormalMatrix();
+        Matrix4f posMatrix = matrices.peek().getPositionMatrix();
 
-        buf.begin(VertexFormat.DrawMode.LINES, VertexFormats.LINES);
+        buf.begin(VertexFormat.DrawMode.QUADS, VertexFormats.POSITION_COLOR);
 
         for (MobEntity mob : tagged) {
             int   packed = ((LivestockTaggable) mob).npclogistics_getOwnerColor();
@@ -79,19 +77,19 @@ public class LivestockCollarRenderer {
                 float z1 = (float) pos.z + (float) Math.sin(a1) * radius;
                 float x2 = (float) pos.x + (float) Math.cos(a2) * radius;
                 float z2 = (float) pos.z + (float) Math.sin(a2) * radius;
-                float nx = (float) Math.cos((a1 + a2) * 0.5);
-                float nz = (float) Math.sin((a1 + a2) * 0.5);
 
-                buf.vertex(posMatrix, x1, y, z1).color(colR, colG, colB, 1.0f).normal(normMatrix, nx, 0, nz).next();
-                buf.vertex(posMatrix, x2, y, z2).color(colR, colG, colB, 1.0f).normal(normMatrix, nx, 0, nz).next();
+                buf.vertex(posMatrix, x1, y - BAND_HALF, z1).color(colR, colG, colB, 0.9f).next();
+                buf.vertex(posMatrix, x2, y - BAND_HALF, z2).color(colR, colG, colB, 0.9f).next();
+                buf.vertex(posMatrix, x2, y + BAND_HALF, z2).color(colR, colG, colB, 0.9f).next();
+                buf.vertex(posMatrix, x1, y + BAND_HALF, z1).color(colR, colG, colB, 0.9f).next();
             }
         }
 
         tes.draw();
         matrices.pop();
 
+        RenderSystem.enableCull();
         RenderSystem.enableDepthTest();
         RenderSystem.disableBlend();
-        RenderSystem.lineWidth(1.0f);
     }
 }

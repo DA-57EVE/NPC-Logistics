@@ -372,18 +372,23 @@ public class FarmerBrain {
 
     private void harvestCrop(ServerWorld world, BlockPos pos, Block cropBlock) {
         swingMainHand(world);
-        world.setBlockState(pos, Blocks.AIR.getDefaultState());
         world.playSound(null, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
                 SoundEvents.BLOCK_GRASS_BREAK, SoundCategory.BLOCKS, 1.0f, 1.0f);
 
-        for (ItemStack drop : getCropDrops(cropBlock))
-            worker.addToWorkerInventory(drop.copy());
-
-        // Replant if we have seed in inventory
-        Item seed = getSeedForCrop(cropBlock);
-        if (seed != null && hasItem(seed)) {
-            consumeItem(seed);
-            world.setBlockState(pos, cropBlock.getDefaultState());
+        List<ItemStack> knownDrops = getCropDrops(cropBlock);
+        if (!knownDrops.isEmpty()) {
+            // Known vanilla/built-in crop: manual drops so NPC gets them directly, then replant
+            world.setBlockState(pos, Blocks.AIR.getDefaultState());
+            for (ItemStack drop : knownDrops) worker.addToWorkerInventory(drop.copy());
+            Item seed = getSeedForCrop(cropBlock);
+            if (seed != null && hasItem(seed)) {
+                consumeItem(seed);
+                world.setBlockState(pos, cropBlock.getDefaultState());
+            }
+        } else {
+            // Unknown/modded crop: let the block drop its own loot naturally;
+            // the PICKUP pass collects the item entities on the next scan cycle
+            world.breakBlock(pos, true, worker);
         }
         NPClogistics.LOGGER.info("{} harvested {} at {}", worker.getName().getString(), cropBlock, pos);
     }
