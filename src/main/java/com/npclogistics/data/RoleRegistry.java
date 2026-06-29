@@ -31,6 +31,8 @@ public class RoleRegistry {
         ROLES.put(Items.NETHERITE_SWORD, NpcRole.BUTCHER);
 
         ROLES.put(Items.LEAD, NpcRole.BREEDER);
+
+        ROLES.put(Items.FISHING_ROD, NpcRole.FISHER);
     }
 
     /** Returns the {@link NpcRole} for the given tool stack, or {@code null} if unrecognised. */

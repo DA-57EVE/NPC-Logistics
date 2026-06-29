@@ -7,6 +7,7 @@ import com.npclogistics.ai.ChickenBrain;
 import com.npclogistics.ai.CraftingTaskBrain;
 import com.npclogistics.ai.DairyBrain;
 import com.npclogistics.ai.FarmerBrain;
+import com.npclogistics.ai.FisherBrain;
 import com.npclogistics.ai.LogisticsNavigation;
 import com.npclogistics.ai.NightBrain;
 import com.npclogistics.ai.ShepherdBrain;
@@ -114,6 +115,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     private final ChickenBrain chickenBrain;
     private final ButcherBrain butcherBrain;
     private final BreederBrain breederBrain;
+    private final FisherBrain fisherBrain;
     private final CraftingTaskBrain craftingTaskBrain;
     private final NightBrain nightBrain;
 
@@ -173,6 +175,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
         chickenBrain       = new ChickenBrain(this);
         butcherBrain       = new ButcherBrain(this);
         breederBrain       = new BreederBrain(this);
+        fisherBrain        = new FisherBrain(this);
         craftingTaskBrain  = new CraftingTaskBrain(this);
         nightBrain         = new NightBrain(this);
     }
@@ -457,6 +460,7 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
                 case CHICKEN  -> { setStepHeight(0.6f); chickenBrain.tick(sw); }
                 case BUTCHER  -> { setStepHeight(0.6f); butcherBrain.tick(sw); }
                 case BREEDER  -> { setStepHeight(0.6f); breederBrain.tick(sw); }
+                case FISHER   -> { setStepHeight(0.6f); fisherBrain.tick(sw); }
             }
             return;
         }
