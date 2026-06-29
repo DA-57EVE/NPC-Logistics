@@ -83,7 +83,8 @@ src/
     │   └── ClientNetworking.java
     ├── renderer/
     │   ├── LogisticsWorkerRenderer.java
-    │   └── LivestockCollarRenderer.java # Renders herd-colour collar rings
+    │   ├── LivestockCollarRenderer.java # Renders herd-colour collar rings (QUADS)
+    │   └── TokenBeamRenderer.java       # Renders vertical beams at stamped token positions
     └── screen/
         ├── EquipmentScreen.java
         ├── WorkOrderScreen.java
@@ -135,8 +136,19 @@ To remove a tag from an animal: **sneak + right-click** with an empty hand.
 ### Work Goggles
 
 A helmet-slot item that renders route overlays and livestock collar rings for nearby
-NPC workers. Overlays render through walls. Craft with 2× Glass Pane + Iron Ingot +
+NPC workers, and **coloured vertical beams** above every stamped Location Token in your
+inventory. Overlays render through walls. Craft with 2× Glass Pane + Iron Ingot +
 Gold Ingot (shapeless).
+
+**Token beam colours** (visible while wearing goggles):
+
+| Token | Beam colour |
+|-------|-------------|
+| Collect Token | Green |
+| Deposit Token | Red |
+| Jobsite Token | Orange |
+| Craft Token | Gold |
+| Bed Token | Purple |
 
 #### Crafting recipes (shapeless)
 
@@ -343,10 +355,18 @@ After a harvest run the worker deposits all produce at the deposit chest, restoc
 (up to 16 of each type), then returns to scanning.
 
 **Supported crops:** wheat, carrots, potatoes, beetroot, melon (fruit), pumpkin (fruit),
-sugar cane (column), cactus (column). Melon and pumpkin stems are never touched — the
-farmer harvests only the spawned fruit block, so stems regrow and produce indefinitely.
-Sugar cane and cactus are harvested at block 2; vanilla neighbour-cascade drops upper
-blocks as item entities, which the pickup pass collects on the next cycle.
+sugar cane (column), cactus (column), **nether wart** (soul sand). Melon and pumpkin
+stems are never touched — the farmer harvests only the spawned fruit block, so stems
+regrow and produce indefinitely. Sugar cane and cactus are harvested at block 2; vanilla
+neighbour-cascade drops upper blocks as item entities, which the pickup pass collects on
+the next cycle. Nether wart is harvested at age 3, replanted immediately, and restocked
+from the deposit chest (up to 16 per cycle) — soul sand patches work in both the Overworld
+and the Nether.
+
+**Modded crop compatibility:** crops whose block class extends vanilla `CropBlock` are
+detected and harvested automatically. Drops are collected via the block's own loot table
+(`world.breakBlock`) so no produce is lost, though replanting is not supported for
+mod-added crops.
 
 ### Setting up a farm
 
@@ -618,7 +638,7 @@ used as the flat `layer0` fallback.
 
 ## Changelog
 
-### v1.1.7 (2026-06-29)
+### v1.1.7 (2026-06-29) — The Fisherman Update
 - **Fisher role:** workers equipped with a fishing rod stand on an assigned bank block,
   face the nearest water, and fish autonomously. Cast, wait, bite (splash sound), reel in
   (retrieve sound), collect catch, deposit after 6 catches. Loot: 60% cod · 25% salmon ·
@@ -629,6 +649,26 @@ used as the flat `layer0` fallback.
 - **Farmer — sugar cane & cactus:** targets the second block of each column so the base
   remains and the column regrows. Vanilla neighbour-cascade drops upper blocks as item
   entities; the pickup pass collects them on the next cycle.
+- **Farmer — nether wart:** detects mature nether wart (age 3) on soul sand, harvests,
+  replants immediately, and restocks up to 16 from the deposit chest. Works in both the
+  Overworld and the Nether.
+- **Farmer — modded crop compatibility:** crops whose block class extends vanilla
+  `CropBlock` are automatically detected. Unknown crops are broken via `world.breakBlock`
+  so all produce drops via the block's own loot table rather than being silently lost.
+- **Butcher — per-species minimum populations:** cull threshold is now species-aware
+  (sheep 16, cows 8, chickens 10, pigs 6) so wool flocks are large enough to sustain
+  continuous shearing cycles.
+- **Token beams:** while wearing Work Goggles, a coloured vertical beam rises 20 blocks
+  above every stamped Location Token in your inventory — green (collect), red (deposit),
+  orange (jobsite), gold (craft), purple (bed). Makes locating tokens in the field instant.
+- **Collar rings — visual upgrade:** rings now render as solid 10 cm quad bands instead
+  of 1-pixel GPU lines, giving consistent width on all drivers and matching the goggle
+  overlay aesthetic.
+- **Work-complete sound:** a soft chime plays at the worker's position after each
+  deposit run (farmer and fisher). Subtle confirmation that a trip completed.
+- **Despawn fix:** workers could be silently removed by vanilla's despawn logic when no
+  player was nearby. `cannotDespawn()` now always returns true — workers persist
+  indefinitely like villagers.
 
 ### v1.1.6 (2026-06-27/28)
 - **Butcher role:** workers equipped with a sword circuit all tagged herds, cull animals
@@ -787,7 +827,9 @@ used as the flat `layer0` fallback.
 
 ### Polish / future
 - [ ] Additional roles: Miner, Woodcutter
-- [ ] Farmer: nether wart (soul sand), melon/pumpkin stem planting for expansion
+- [x] Farmer: nether wart (soul sand)
+- [ ] Farmer: melon/pumpkin stem planting for expansion
 - [ ] Pathfinding: multi-dimension support
-- [ ] Sounds: footstep and work-complete sounds
-- [ ] Location Tokens: visual beam at stamped position
+- [ ] Sounds: footstep sounds
+- [x] Sounds: work-complete chime after depositing
+- [x] Location Tokens: visual beam at stamped position (Work Goggles)
