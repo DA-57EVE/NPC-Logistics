@@ -5,8 +5,8 @@
 A Minecraft Fabric mod that adds **Logistics Worker NPCs** capable of executing
 item-collection and delivery routes across chests and barrels, and **Role-based autonomous
 workers** that perform ongoing jobs — including a **Farmer**, **Shepherd**, **Dairy**,
-**Chicken**, **Butcher**, and **Breeder** role, each running independently with no further
-player input after setup.
+**Chicken**, **Butcher**, **Breeder**, and **Fisher** role, each running independently with
+no further player input after setup.
 
 ---
 
@@ -51,6 +51,7 @@ src/
 │   │   ├── ChickenBrain.java           # Chicken role state machine (+ breeding)
 │   │   ├── ButcherBrain.java           # Butcher role state machine
 │   │   ├── BreederBrain.java           # Breeder role state machine
+│   │   ├── FisherBrain.java            # Fisher role state machine
 │   │   └── NightBrain.java             # Night/sleep behaviour
 │   ├── command/
 │   │   └── WorkOrderCommand.java       # /workorder admin commands
@@ -254,6 +255,7 @@ Assign an autonomous **Role** to the worker using a three-slot kit:
 | **Tool** | Feather | Chicken |
 | **Tool** | Sword (any tier) | Butcher |
 | **Tool** | Lead | Breeder |
+| **Tool** | Fishing Rod | Fisher |
 | **Jobsite Token** | Stamped Location Token | Centre of the work area / herd pen |
 | **Deposit Token** | Stamped Location Token | Chest/barrel for produce/output/feed |
 
@@ -333,12 +335,18 @@ of the jobsite token's position:
 | Priority | Action | Detail |
 |----------|--------|--------|
 | 1 | **Pick up dropped items** | Collects item entities in the scan radius before doing any crop work |
-| 2 | **Harvest mature crops** | Breaks fully grown wheat, carrots, potatoes, or beetroot; replants from inventory in the same tick |
-| 3 | **Plant on empty farmland** | Seeds bare farmland blocks when seeds are available |
-| 4 | **Till adjacent dirt/grass** | Hoes bare dirt or grass blocks adjacent to existing farmland (within **10 blocks** of the jobsite) |
+| 2 | **Harvest mature crops** | Breaks fully grown wheat, carrots, potatoes, beetroot; harvests melon and pumpkin fruit blocks; breaks the second block of sugar cane and cactus columns (base always preserved) |
+| 3 | **Plant on empty farmland** | Seeds bare farmland blocks when seeds are available; skips spots adjacent to melon/pumpkin stems so fruit always has space to grow |
+| 4 | **Till adjacent dirt/grass** | Hoes bare dirt or grass blocks adjacent to existing farmland (within **10 blocks** of the jobsite); also skips spots adjacent to melon/pumpkin stems |
 
 After a harvest run the worker deposits all produce at the deposit chest, restocks seeds
 (up to 16 of each type), then returns to scanning.
+
+**Supported crops:** wheat, carrots, potatoes, beetroot, melon (fruit), pumpkin (fruit),
+sugar cane (column), cactus (column). Melon and pumpkin stems are never touched — the
+farmer harvests only the spawned fruit block, so stems regrow and produce indefinitely.
+Sugar cane and cactus are harvested at block 2; vanilla neighbour-cascade drops upper
+blocks as item entities, which the pickup pass collects on the next cycle.
 
 ### Setting up a farm
 
@@ -467,6 +475,35 @@ dedicated breeder rather than relying on the integrated breeding in each role br
 
 ---
 
+## Fisher Role
+
+When equipped with a **fishing rod**, a **Jobsite Token** (stamped on the bank block
+where the fisher stands), and a **Deposit Token** (output chest), a worker fishes
+autonomously at the designated spot.
+
+### What the Fisher does
+
+- Navigates to the jobsite block, stands on the bank, and faces the nearest water.
+- **Casts** the rod (arm swing + throw sound), then waits a random **5–10 seconds**
+  for a bite.
+- On a bite (splash sound) reels in after a short delay (retrieve sound) and adds the
+  catch to inventory.
+- Repeats up to **6 catches per trip**, then walks to the deposit chest, deposits all
+  fish, and heads back to fish again.
+
+**Loot table (per catch):** 60% Raw Cod · 25% Raw Salmon · 13% Tropical Fish · 2% Pufferfish.
+
+### Setting up a Fisher
+
+1. Find a river, lake, or pond with accessible bank blocks.
+2. Stamp a **Jobsite Token** on the bank block where you want the fisher to stand
+   (not on the water itself — the NPC finds the nearest water automatically).
+3. Place a chest nearby and stamp a **Deposit Token** on it.
+4. Open the worker's **Role tab**, place a fishing rod and both tokens in the three slots.
+5. Close the screen — the worker walks to the bank and starts fishing immediately.
+
+---
+
 ## Night Behaviour
 
 By default, all workers stop at dusk and seek shelter:
@@ -580,6 +617,18 @@ used as the flat `layer0` fallback.
 ---
 
 ## Changelog
+
+### v1.1.7 (2026-06-29)
+- **Fisher role:** workers equipped with a fishing rod stand on an assigned bank block,
+  face the nearest water, and fish autonomously. Cast, wait, bite (splash sound), reel in
+  (retrieve sound), collect catch, deposit after 6 catches. Loot: 60% cod · 25% salmon ·
+  13% tropical fish · 2% pufferfish.
+- **Farmer — melon & pumpkin:** the farmer now harvests melon and pumpkin fruit blocks.
+  Stems are never disturbed; the planting and tilling passes skip any spot adjacent to a
+  melon or pumpkin stem so fruit always has room to spawn.
+- **Farmer — sugar cane & cactus:** targets the second block of each column so the base
+  remains and the column regrows. Vanilla neighbour-cascade drops upper blocks as item
+  entities; the pickup pass collects them on the next cycle.
 
 ### v1.1.6 (2026-06-27/28)
 - **Butcher role:** workers equipped with a sword circuit all tagged herds, cull animals
@@ -721,6 +770,7 @@ used as the flat `layer0` fallback.
 - [x] Chicken (feather) — collect dropped eggs, deposit, integrated breeding
 - [x] Butcher (sword) — multi-herd circuit, cull to min 6, collect drops, deposit feed, return meat
 - [x] Breeder (lead) — standalone breeding NPC (optional if using Shepherd/Dairy/Chicken)
+- [x] Fisher (fishing rod) — autonomous fishing, faces water, cast/wait/reel cycle, deposits catch
 
 ### Livestock system
 - [x] Livestock Tag — claim animals to a pen, nudge strays back
@@ -737,6 +787,7 @@ used as the flat `layer0` fallback.
 
 ### Polish / future
 - [ ] Additional roles: Miner, Woodcutter
+- [ ] Farmer: nether wart (soul sand), melon/pumpkin stem planting for expansion
 - [ ] Pathfinding: multi-dimension support
 - [ ] Sounds: footstep and work-complete sounds
 - [ ] Location Tokens: visual beam at stamped position
