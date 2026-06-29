@@ -38,7 +38,11 @@ public class ButcherBrain {
     // ── Constants ─────────────────────────────────────────────────────────────
     private static final int    DISCOVERY_RADIUS = 64;   // blocks from jobsite to scan for herds
     private static final int    HERD_RADIUS      = 24;   // box around each herd jobsite
-    private static final int    MIN_POPULATION   = 6;    // animals to leave alive per herd
+    // Minimum alive per herd by species — higher for wool/egg producers, lower for pure-meat animals
+    private static final int    MIN_SHEEP        = 16;
+    private static final int    MIN_COW          = 8;
+    private static final int    MIN_PIG          = 6;
+    private static final int    MIN_CHICKEN      = 10;
     // Feed deposit = 1 item per animal in the herd (= 2 per breeding pair, exactly one round of breeding)
     private static final int    FEED_TAKE_EACH   = 32;   // max wheat/carrot/seeds taken from home chest
     private static final double ARRIVAL_DIST     = 2.0;
@@ -150,9 +154,10 @@ public class ButcherBrain {
         }
 
         List<AnimalEntity> herd = getHerdAnimals(world, herdPos);
-        if (herd.size() <= MIN_POPULATION) {
+        int minPop = minPopulationFor(herd);
+        if (herd.size() <= minPop) {
             NPClogistics.LOGGER.info("{} butcher: herd at {} has {} animals (min {}), moving to feed",
-                    worker.getName().getString(), herdPos, herd.size(), MIN_POPULATION);
+                    worker.getName().getString(), herdPos, herd.size(), minPop);
             phase = Phase.FEEDING_HERD;
             timer = 0;
             targetAnimal = null;
@@ -481,6 +486,16 @@ public class ButcherBrain {
         if (animal instanceof PigEntity)     return Items.CARROT;
         if (animal instanceof ChickenEntity) return Items.WHEAT_SEEDS;
         return null;
+    }
+
+    /** Returns the minimum live count for a herd, based on the dominant species. */
+    private static int minPopulationFor(List<AnimalEntity> herd) {
+        if (herd.isEmpty()) return MIN_PIG; // fallback
+        AnimalEntity sample = herd.get(0);
+        if (sample instanceof SheepEntity)   return MIN_SHEEP;
+        if (sample instanceof CowEntity)     return MIN_COW;
+        if (sample instanceof ChickenEntity) return MIN_CHICKEN;
+        return MIN_PIG;
     }
 
     // ── Animation ─────────────────────────────────────────────────────────────
