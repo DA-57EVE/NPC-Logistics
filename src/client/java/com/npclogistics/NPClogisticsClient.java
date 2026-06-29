@@ -3,6 +3,7 @@ package com.npclogistics;
 import com.npclogistics.client.network.ClientNetworking;
 import com.npclogistics.client.renderer.LivestockCollarRenderer;
 import com.npclogistics.client.renderer.RouteOverlayRenderer;
+import com.npclogistics.client.renderer.TokenBeamRenderer;
 import com.npclogistics.entity.ModEntities;
 import com.npclogistics.renderer.LogisticsWorkerRenderer;
 import com.npclogistics.screen.EquipmentScreen;
@@ -21,6 +22,7 @@ public class NPClogisticsClient implements ClientModInitializer {
         HandledScreens.register(ModScreenHandlers.EQUIPMENT, EquipmentScreen::new);
         RouteOverlayRenderer.register();
         LivestockCollarRenderer.register();
+        TokenBeamRenderer.register();
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> RouteOverlayRenderer.clearAll());
     }
 }

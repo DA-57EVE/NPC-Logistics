@@ -188,6 +188,9 @@ public class LogisticsWorkerEntity extends PathAwareEntity {
     }
 
     @Override
+    public boolean cannotDespawn() { return true; }
+
+    @Override
     protected void initDataTracker() {
         super.initDataTracker();
         dataTracker.startTracking(SKIN_URL_DATA, DEFAULT_SKIN_URL);

@@ -170,6 +170,8 @@ public class FisherBrain {
                     block == Blocks.BARREL ? SoundEvents.BLOCK_BARREL_CLOSE : SoundEvents.BLOCK_CHEST_CLOSE,
                     SoundCategory.BLOCKS, 0.4f, 1.0f);
             world.addSyncedBlockEvent(depositPos, block, 1, 0);
+            world.playSound(null, worker.getX(), worker.getY(), worker.getZ(),
+                    SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.NEUTRAL, 0.2f, 1.5f);
             worker.getNavigation().stop();
             phase = Phase.TRAVELLING;
         }

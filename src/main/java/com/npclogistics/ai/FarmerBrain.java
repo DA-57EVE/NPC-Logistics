@@ -186,6 +186,8 @@ public class FarmerBrain {
                     block == Blocks.BARREL ? SoundEvents.BLOCK_BARREL_CLOSE : SoundEvents.BLOCK_CHEST_CLOSE,
                     SoundCategory.BLOCKS, 0.4f, 1.0f);
             world.addSyncedBlockEvent(depositPos, block, 1, 0);
+            world.playSound(null, worker.getX(), worker.getY(), worker.getZ(),
+                    SoundEvents.ENTITY_EXPERIENCE_ORB_PICKUP, SoundCategory.NEUTRAL, 0.2f, 1.5f);
             beginWaiting();
         }
     }
@@ -239,6 +241,8 @@ public class FarmerBrain {
                         return "sugar cane growing";
                     if (b == Blocks.CACTUS && world.getBlockState(pos.down()).getBlock() != Blocks.CACTUS)
                         return "cactus growing";
+                    if (b == Blocks.NETHER_WART && state.get(NetherWartBlock.AGE) < 3)
+                        return "nether wart growing";
                 }
             }
         }
@@ -277,7 +281,8 @@ public class FarmerBrain {
                             || b == Blocks.MELON || b == Blocks.PUMPKIN
                             || ((b == Blocks.SUGAR_CANE || b == Blocks.CACTUS)
                                 && world.getBlockState(pos.down()).getBlock() == b
-                                && world.getBlockState(pos.down().down()).getBlock() != b);
+                                && world.getBlockState(pos.down().down()).getBlock() != b)
+                            || (b == Blocks.NETHER_WART && state.get(NetherWartBlock.AGE) == 3);
                     if (harvestable) {
                         double d = worker.getPos().distanceTo(pos.toCenterPos());
                         if (d < bestDist) {
@@ -293,11 +298,12 @@ public class FarmerBrain {
         if (best == null) {
             Block seedCrop = getCropBlockFromInventory();
             if (seedCrop != null) {
+                Block requiredBase = (seedCrop == Blocks.NETHER_WART) ? Blocks.SOUL_SAND : Blocks.FARMLAND;
                 for (int dx = -SCAN_RADIUS; dx <= SCAN_RADIUS; dx++) {
                     for (int dz = -SCAN_RADIUS; dz <= SCAN_RADIUS; dz++) {
                         for (int dy = -3; dy <= 3; dy++) {
                             BlockPos farmland = center.add(dx, dy, dz);
-                            if (world.getBlockState(farmland).getBlock() != Blocks.FARMLAND) continue;
+                            if (world.getBlockState(farmland).getBlock() != requiredBase) continue;
                             BlockPos cropPos = farmland.up();
                             if (!world.getBlockState(cropPos).isAir()) continue;
                             // Leave space adjacent to melon/pumpkin stems for fruit to grow into
@@ -457,7 +463,7 @@ public class FarmerBrain {
     /** Take up to 16 of each seed type back from the deposit chest into the NPC's inventory.
      *  Caps at 16 total per type across all chest slots, not 16 per slot. */
     private void restockSeeds(Inventory container) {
-        int takenCarrot = 0, takenPotato = 0, takenWheatSeed = 0, takenBeetrootSeed = 0;
+        int takenCarrot = 0, takenPotato = 0, takenWheatSeed = 0, takenBeetrootSeed = 0, takenNetherWart = 0;
         for (int j = 0; j < container.size(); j++) {
             ItemStack slot = container.getStack(j);
             if (slot.isEmpty()) continue;
@@ -467,6 +473,7 @@ public class FarmerBrain {
             else if (item == Items.POTATO)         { already = takenPotato;       need = 16 - takenPotato; }
             else if (item == Items.WHEAT_SEEDS)    { already = takenWheatSeed;    need = 16 - takenWheatSeed; }
             else if (item == Items.BEETROOT_SEEDS) { already = takenBeetrootSeed; need = 16 - takenBeetrootSeed; }
+            else if (item == Items.NETHER_WART)    { already = takenNetherWart;   need = 16 - takenNetherWart; }
             else continue;
             if (need <= 0) continue;
             int take = Math.min(slot.getCount(), need);
@@ -480,6 +487,7 @@ public class FarmerBrain {
                 else if (item == Items.POTATO)         takenPotato       += taken;
                 else if (item == Items.WHEAT_SEEDS)    takenWheatSeed    += taken;
                 else if (item == Items.BEETROOT_SEEDS) takenBeetrootSeed += taken;
+                else if (item == Items.NETHER_WART)    takenNetherWart   += taken;
             }
         }
         container.markDirty();
@@ -567,6 +575,7 @@ public class FarmerBrain {
         if (b == Blocks.SUGAR_CANE || b == Blocks.CACTUS)
             return world.getBlockState(pos.down()).getBlock() == b
                 && world.getBlockState(pos.down().down()).getBlock() != b;
+        if (b == Blocks.NETHER_WART) return state.get(NetherWartBlock.AGE) == 3;
         return false;
     }
 
@@ -576,6 +585,7 @@ public class FarmerBrain {
         if (hasItem(Items.CARROT))         return Blocks.CARROTS;
         if (hasItem(Items.POTATO))         return Blocks.POTATOES;
         if (hasItem(Items.BEETROOT_SEEDS)) return Blocks.BEETROOTS;
+        if (hasItem(Items.NETHER_WART))    return Blocks.NETHER_WART;
         return null;
     }
 
@@ -617,17 +627,18 @@ public class FarmerBrain {
      *  when their total across all slots exceeds the 16-item replant reserve. */
     private boolean hasItemsToDeposit() {
         SimpleInventory inv = worker.getWorkerInventory();
-        int totalCarrot = 0, totalPotato = 0;
+        int totalCarrot = 0, totalPotato = 0, totalNetherWart = 0;
         for (int i = 0; i < inv.size(); i++) {
             ItemStack s = inv.getStack(i);
             if (s.isEmpty()) continue;
             Item item = s.getItem();
             if (item == Items.WHEAT_SEEDS || item == Items.BEETROOT_SEEDS) continue;
-            if (item == Items.CARROT)  { totalCarrot  += s.getCount(); continue; }
-            if (item == Items.POTATO)  { totalPotato  += s.getCount(); continue; }
+            if (item == Items.CARROT)      { totalCarrot     += s.getCount(); continue; }
+            if (item == Items.POTATO)      { totalPotato     += s.getCount(); continue; }
+            if (item == Items.NETHER_WART) { totalNetherWart += s.getCount(); continue; }
             return true; // any other non-seed item (wheat, beetroot, etc.) → deposit
         }
-        return totalCarrot > 16 || totalPotato > 16;
+        return totalCarrot > 16 || totalPotato > 16 || totalNetherWart > 16;
     }
 
     private static List<ItemStack> getCropDrops(Block cropBlock) {
@@ -637,16 +648,18 @@ public class FarmerBrain {
         if (cropBlock == Blocks.BEETROOTS)  return List.of(new ItemStack(Items.BEETROOT),   new ItemStack(Items.BEETROOT_SEEDS));
         if (cropBlock == Blocks.MELON)      return List.of(new ItemStack(Items.MELON_SLICE, 5));
         if (cropBlock == Blocks.PUMPKIN)    return List.of(new ItemStack(Items.PUMPKIN,    1));
-        if (cropBlock == Blocks.SUGAR_CANE) return List.of(new ItemStack(Items.SUGAR_CANE, 1));
-        if (cropBlock == Blocks.CACTUS)     return List.of(new ItemStack(Items.CACTUS,     1));
+        if (cropBlock == Blocks.SUGAR_CANE)  return List.of(new ItemStack(Items.SUGAR_CANE,  1));
+        if (cropBlock == Blocks.CACTUS)      return List.of(new ItemStack(Items.CACTUS,      1));
+        if (cropBlock == Blocks.NETHER_WART) return List.of(new ItemStack(Items.NETHER_WART, 2));
         return List.of();
     }
 
     private static Item getSeedForCrop(Block cropBlock) {
-        if (cropBlock == Blocks.WHEAT)     return Items.WHEAT_SEEDS;
-        if (cropBlock == Blocks.CARROTS)   return Items.CARROT;
-        if (cropBlock == Blocks.POTATOES)  return Items.POTATO;
-        if (cropBlock == Blocks.BEETROOTS) return Items.BEETROOT_SEEDS;
+        if (cropBlock == Blocks.WHEAT)       return Items.WHEAT_SEEDS;
+        if (cropBlock == Blocks.CARROTS)     return Items.CARROT;
+        if (cropBlock == Blocks.POTATOES)    return Items.POTATO;
+        if (cropBlock == Blocks.BEETROOTS)   return Items.BEETROOT_SEEDS;
+        if (cropBlock == Blocks.NETHER_WART) return Items.NETHER_WART;
         return null;
     }
 }
